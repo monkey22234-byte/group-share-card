@@ -30,6 +30,7 @@ interface RoomSyncModalProps {
   onJoinRoomSuccess: (room: LiveRoomState, role: 'host' | 'member') => void;
   onLeaveRoom: () => void;
   currentTopicId: string;
+  disableClose?: boolean;
 }
 
 export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
@@ -42,9 +43,17 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
   onJoinRoomSuccess,
   onLeaveRoom,
   currentTopicId,
+  disableClose = false,
 }) => {
   const [tab, setTab] = useState<'create' | 'join'>('join');
-  const [inputRoomCode, setInputRoomCode] = useState('');
+  const [inputRoomCode, setInputRoomCode] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return (params.get('room') || '').toUpperCase();
+    } catch {
+      return '';
+    }
+  });
   const [inputRoomName, setInputRoomName] = useState('恩典小組聚會');
   const [inputMemberName, setInputMemberName] = useState(currentUserName || '');
   const [isLoading, setIsLoading] = useState(false);
@@ -161,12 +170,36 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
           </div>
 
           <button
-            onClick={onClose}
-            className="p-1.5 rounded-full text-stone-400 hover:text-white hover:bg-stone-700 transition"
+            id="btn-room-modal-close"
+            onClick={() => {
+              if (!disableClose) {
+                onClose();
+              }
+            }}
+            disabled={disableClose}
+            title={disableClose ? '請先輸入名字並加入房間以繼續' : '關閉'}
+            className={`p-1.5 rounded-full transition ${
+              disableClose
+                ? 'text-stone-600 opacity-25 cursor-not-allowed pointer-events-none'
+                : 'text-stone-400 hover:text-white hover:bg-stone-700 cursor-pointer'
+            }`}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Mandatory Setup Banner when disableClose is active */}
+        {disableClose && (
+          <div className="mx-4 sm:mx-5 mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-start gap-2.5 text-xs text-amber-900">
+            <span className="text-base leading-none">👋</span>
+            <div className="space-y-0.5">
+              <p className="font-bold text-amber-950">初次使用請先加入小組房間</p>
+              <p className="text-amber-800/90 leading-relaxed">
+                請輸入你的姓名與房間代碼（或由小組長開房），完成後即可開啟即時小組連動！
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Content Area */}
         <div className="p-4 sm:p-5 overflow-y-auto space-y-4">

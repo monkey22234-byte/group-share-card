@@ -37,8 +37,19 @@ const STORAGE_KEYS = {
   CURRENT_TOPIC_ID: 'smallgroup_cur_topic_v1',
   ACTIONS: 'smallgroup_actions_v1',
   MEMBERS: 'smallgroup_members_v1',
-  USER_NAME: 'smallgroup_user_name_v1',
+  USER_NAME: 'currentUserName',
+  LEGACY_USER_NAME: 'smallgroup_user_name_v1',
   LAST_ROOM_CODE: 'smallgroup_last_room_code_v1',
+};
+
+const getStoredUserName = (): string => {
+  try {
+    const direct = localStorage.getItem('currentUserName');
+    if (direct && direct.trim()) return direct.trim();
+    const legacy = localStorage.getItem('smallgroup_user_name_v1');
+    if (legacy && legacy.trim() && legacy !== '組員') return legacy.trim();
+  } catch {}
+  return '';
 };
 
 const DEFAULT_MEMBERS: GroupMember[] = [
@@ -51,15 +62,27 @@ const DEFAULT_MEMBERS: GroupMember[] = [
 ];
 
 export default function App() {
-  // Current User Identity in Live Room
+  // Check localStorage for currentUserName on startup
   const [currentUserName, setCurrentUserName] = useState<string>(() => {
-    return localStorage.getItem(STORAGE_KEYS.USER_NAME) || '組員';
+    return getStoredUserName();
   });
   const [currentUserRole, setCurrentUserRole] = useState<'host' | 'member'>('member');
 
+  // Track if user has completed the mandatory name & room joining
+  const [hasJoinedRoom, setHasJoinedRoom] = useState<boolean>(() => {
+    return Boolean(getStoredUserName());
+  });
+
   // Live Room State
   const [liveRoom, setLiveRoom] = useState<LiveRoomState | null>(null);
-  const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
+
+  // If currentUserName is not found in localStorage at startup, force auto-open RoomSyncModal
+  const [isRoomModalOpen, setIsRoomModalOpen] = useState<boolean>(() => {
+    return !getStoredUserName();
+  });
+
+  // Close is disabled until the user inputs their name and joins a room
+  const isCloseDisabled = !hasJoinedRoom || !currentUserName.trim() || !liveRoom;
 
   // Topics Database (Loaded from Google Sheet database or default authentic topics)
   const [topics, setTopics] = useState<WeeklyTopic[]>(() => {
@@ -151,11 +174,13 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const roomParam = params.get('room');
-    if (roomParam && !liveRoom) {
-      joinLiveRoom(roomParam, currentUserName).then((roomState) => {
+    const storedName = getStoredUserName();
+    if (roomParam && !liveRoom && storedName) {
+      joinLiveRoom(roomParam, storedName).then((roomState) => {
         if (roomState) {
           setLiveRoom(roomState);
           setCurrentUserRole('member');
+          setHasJoinedRoom(true);
         }
       });
     }
@@ -245,7 +270,13 @@ export default function App() {
   }, [members]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.USER_NAME, currentUserName);
+    if (currentUserName && currentUserName.trim()) {
+      try {
+        localStorage.setItem('currentUserName', currentUserName.trim());
+        localStorage.setItem(STORAGE_KEYS.USER_NAME, currentUserName.trim());
+        localStorage.setItem(STORAGE_KEYS.LEGACY_USER_NAME, currentUserName.trim());
+      } catch {}
+    }
   }, [currentUserName]);
 
   // Current active topic
@@ -571,14 +602,31 @@ export default function App() {
       {/* Live Room Sync Modal */}
       <RoomSyncModal
         isOpen={isRoomModalOpen}
-        onClose={() => setIsRoomModalOpen(false)}
+        onClose={() => {
+          if (!isCloseDisabled) {
+            setIsRoomModalOpen(false);
+          }
+        }}
+        disableClose={isCloseDisabled}
         currentRoom={liveRoom}
         currentUserRole={currentUserRole}
         currentUserName={currentUserName}
-        onSetCurrentUserName={setCurrentUserName}
+        onSetCurrentUserName={(name) => {
+          const trimmed = name.trim();
+          setCurrentUserName(trimmed);
+          if (trimmed) {
+            try {
+              localStorage.setItem('currentUserName', trimmed);
+              localStorage.setItem(STORAGE_KEYS.USER_NAME, trimmed);
+              localStorage.setItem(STORAGE_KEYS.LEGACY_USER_NAME, trimmed);
+            } catch {}
+          }
+        }}
         onJoinRoomSuccess={(room, role) => {
           setLiveRoom(room);
           setCurrentUserRole(role);
+          setHasJoinedRoom(true);
+          setIsRoomModalOpen(false);
         }}
         onLeaveRoom={() => setLiveRoom(null)}
         currentTopicId={currentTopicId}
