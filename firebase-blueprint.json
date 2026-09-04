@@ -1,0 +1,21 @@
+{
+  "entities": {
+    "rooms": {
+      "title": "Room",
+      "description": "Fellowship live sharing rooms",
+      "type": "object",
+      "properties": {
+        "roomCode": { "type": "string" },
+        "roomName": { "type": "string" },
+        "currentTopicId": { "type": "string" },
+        "currentStage": { "type": "string" },
+        "currentCardIndex": { "type": "number" },
+        "hostName": { "type": "string" },
+        "members": { "type": "array" },
+        "activeSpeaker": { "type": "string" },
+        "timerEnd": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      }
+    }
+  }
+}

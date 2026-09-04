@@ -1,0 +1,6 @@
+{
+  "name": "每週小組分享卡 - 聚會討論與行動彙整",
+  "description": "專為教會每週小組與團契分享設計的互動卡片 APP，提供破冰題、主題回顧、真理思想與生活應用四階段卡片，支援即時情緒價值互動按鈕、行動方案打字與一鍵彙整複製至 LINE 群組，並支援一鍵同步與長期保存行動方案至 Google 試算表。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
