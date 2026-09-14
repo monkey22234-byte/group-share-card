@@ -54,7 +54,6 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
       return '';
     }
   });
-  const [inputRoomName, setInputRoomName] = useState('');
   const [inputMemberName, setInputMemberName] = useState(currentUserName || '');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -75,7 +74,7 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
 
     try {
       const newCode = generateRoomCode();
-      const finalRoomName = inputRoomName.trim() || `${inputMemberName.trim()}的小組聚會`;
+      const finalRoomName = `${inputMemberName.trim()}的小組聚會`;
       await createLiveRoom(newCode, finalRoomName, inputMemberName.trim(), currentTopicId);
       
       const newRoomState: LiveRoomState = {
@@ -144,7 +143,7 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
     const localRoomState: LiveRoomState = {
       roomId: cleanCode,
       roomCode: cleanCode,
-      roomName: inputRoomName.trim() || `${inputMemberName.trim()}的小組聚會`,
+      roomName: `${inputMemberName.trim()}的小組聚會`,
       currentTopicId,
       currentStage: 'icebreaker',
       currentCardIndex: 0,
@@ -432,19 +431,6 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
                       onChange={(e) => setInputMemberName(e.target.value)}
                       className="w-full px-3 py-2.5 rounded-xl border border-stone-300 bg-stone-50 text-stone-900 placeholder:text-stone-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                       required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-stone-700 mb-1">
-                      聚會名稱（選填）
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="例如: 青年週六小組（留空則自動以暱稱命名）"
-                      value={inputRoomName}
-                      onChange={(e) => setInputRoomName(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-xl border border-stone-300 bg-stone-50 text-stone-900 placeholder:text-stone-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                     />
                   </div>
 
