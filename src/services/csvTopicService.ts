@@ -11,6 +11,8 @@ export const CSV_STORAGE_KEYS = {
   LAST_SYNC_TIME: 'smallgroup_csv_last_sync_v1',
 };
 
+export const APP_TOPICS_STORAGE_KEY = 'smallgroup_topics_v1';
+
 /**
  * Standard CSV Template: Row-Based Questions (題庫明細 - 每列一題)
  * Format: 所屬主題ID, 階段, 題目本文, 小標題, 引導提示, 經文出處, 選項A, 選項B, 選項C, 選項D, 正確答案
@@ -49,9 +51,11 @@ export const SAMPLE_TOPICS_CSV_TEMPLATE = `主題ID, 聚會日期, 主題名稱,
 export const SAMPLE_CSV_TEMPLATE = SAMPLE_ROW_BASED_CSV_TEMPLATE;
 
 /**
- * Robust CSV parser that handles quotes, escaped quotes, and commas within cells
+ * Robust CSV/TSV parser that handles quotes, escaped quotes, and auto-detects commas, tabs, or semicolons
  */
 export function parseCSV(text: string): string[][] {
+  if (!text || !text.trim()) return [];
+
   const lines: string[][] = [];
   let currentRow: string[] = [];
   let currentCell = '';
@@ -59,6 +63,25 @@ export function parseCSV(text: string): string[][] {
 
   // Normalize newlines
   const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  // Auto-detect delimiter from the first few non-empty lines
+  const sampleLines = normalized.split('\n').filter((l) => l.trim().length > 0).slice(0, 5);
+  let delimiter = ',';
+  let totalTabs = 0;
+  let totalCommas = 0;
+  let totalSemis = 0;
+
+  for (const line of sampleLines) {
+    totalTabs += (line.match(/\t/g) || []).length;
+    totalCommas += (line.match(/,/g) || []).length;
+    totalSemis += (line.match(/;/g) || []).length;
+  }
+
+  if (totalTabs > totalCommas && totalTabs > totalSemis) {
+    delimiter = '\t';
+  } else if (totalSemis > totalCommas && totalSemis > totalTabs) {
+    delimiter = ';';
+  }
 
   for (let i = 0; i < normalized.length; i++) {
     const char = normalized[i];
@@ -71,7 +94,7 @@ export function parseCSV(text: string): string[][] {
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (char === ',' && !inQuotes) {
+    } else if (char === delimiter && !inQuotes) {
       currentRow.push(currentCell.trim());
       currentCell = '';
     } else if (char === '\n' && !inQuotes) {
@@ -660,6 +683,20 @@ function parseRowBasedQuestionsCSV(
     ['信息摘要', '摘要']
   );
 
+  // Positional fallback indices according to user specification:
+  // 0: 所屬主題ID, 1: 階段, 2: 題目本文, 3: 小標題, 4: 引導提示, 5: 經文出處, 6: 選項A, 7: 選項B, 8: 選項C, 9: 選項D, 10: 正確答案
+  const effectiveIdCol = idCol !== -1 ? idCol : (headers.length >= 1 ? 0 : -1);
+  const effectiveStageCol = stageCol !== -1 ? stageCol : (headers.length >= 2 ? 1 : -1);
+  const effectiveQuestionCol = questionCol !== -1 ? questionCol : (headers.length >= 3 ? 2 : -1);
+  const effectiveSubtitleCol = subtitleCol !== -1 ? subtitleCol : (headers.length >= 4 ? 3 : -1);
+  const effectiveHintCol = hintCol !== -1 ? hintCol : (headers.length >= 5 ? 4 : -1);
+  const effectiveScriptureCol = scriptureCol !== -1 ? scriptureCol : (headers.length >= 6 ? 5 : -1);
+  const effectiveOptACol = optACol !== -1 ? optACol : (headers.length >= 7 ? 6 : -1);
+  const effectiveOptBCol = optBCol !== -1 ? optBCol : (headers.length >= 8 ? 7 : -1);
+  const effectiveOptCCol = optCCol !== -1 ? optCCol : (headers.length >= 9 ? 8 : -1);
+  const effectiveOptDCol = optDCol !== -1 ? optDCol : (headers.length >= 10 ? 9 : -1);
+  const effectiveAnsCol = ansCol !== -1 ? ansCol : (headers.length >= 11 ? 10 : -1);
+
   // Group questions by topicId
   const topicQuestionsMap = new Map<string, QuestionCard[]>();
   const topicMetaMap = new Map<string, Partial<WeeklyTopic>>();
@@ -669,7 +706,7 @@ function parseRowBasedQuestionsCSV(
     const row = rows[r];
     if (!row || row.length === 0 || row.every((c) => !c.trim())) continue;
 
-    const topicId = (idCol !== -1 ? row[idCol] : row[0])?.trim();
+    const topicId = (effectiveIdCol !== -1 ? row[effectiveIdCol] : row[0])?.trim();
     if (!topicId) continue;
 
     if (!topicQuestionsMap.has(topicId)) {
@@ -681,7 +718,7 @@ function parseRowBasedQuestionsCSV(
     const rowTitle = titleCol !== -1 ? row[titleCol]?.trim() : '';
     const rowDate = dateCol !== -1 ? row[dateCol]?.trim() : '';
     const rowSpeaker = speakerCol !== -1 ? row[speakerCol]?.trim() : '';
-    const rowScripture = scriptureCol !== -1 ? row[scriptureCol]?.trim() : '';
+    const rowScripture = effectiveScriptureCol !== -1 ? row[effectiveScriptureCol]?.trim() : '';
     const rowSummary = summaryCol !== -1 ? row[summaryCol]?.trim() : '';
 
     if (!topicMetaMap.has(topicId)) {
@@ -702,18 +739,18 @@ function parseRowBasedQuestionsCSV(
     }
 
     // Determine Stage
-    const rawStage = (stageCol !== -1 ? row[stageCol] : '')?.trim();
+    const rawStage = (effectiveStageCol !== -1 ? row[effectiveStageCol] : '')?.trim();
     const stage = parseStageName(rawStage);
     if (!stage) continue;
 
     // Question content
-    const qText = (questionCol !== -1 ? row[questionCol] : '')?.trim();
+    const qText = (effectiveQuestionCol !== -1 ? row[effectiveQuestionCol] : '')?.trim();
     if (!qText) continue;
 
     // Subtitle, hint, and scripture reference
-    const subtitle = subtitleCol !== -1 ? row[subtitleCol]?.trim() : '';
-    const hint = hintCol !== -1 ? row[hintCol]?.trim() : '';
-    const scriptureRef = scriptureCol !== -1 ? row[scriptureCol]?.trim() : '';
+    const subtitle = effectiveSubtitleCol !== -1 ? row[effectiveSubtitleCol]?.trim() : '';
+    const hint = effectiveHintCol !== -1 ? row[effectiveHintCol]?.trim() : '';
+    const scriptureRef = effectiveScriptureCol !== -1 ? row[effectiveScriptureCol]?.trim() : '';
 
     const currentQuestions = topicQuestionsMap.get(topicId)!;
     const existingInStage = currentQuestions.filter((q) => q.stage === stage);
@@ -732,11 +769,11 @@ function parseRowBasedQuestionsCSV(
 
     if (stage === 'review') {
       let rawOptions: string[] = [];
-      if (optACol !== -1 || optBCol !== -1 || optCCol !== -1 || optDCol !== -1) {
-        const a = optACol !== -1 ? row[optACol]?.trim() : '';
-        const b = optBCol !== -1 ? row[optBCol]?.trim() : '';
-        const c = optCCol !== -1 ? row[optCCol]?.trim() : '';
-        const d = optDCol !== -1 ? row[optDCol]?.trim() : '';
+      if (effectiveOptACol !== -1 || effectiveOptBCol !== -1 || effectiveOptCCol !== -1 || effectiveOptDCol !== -1) {
+        const a = effectiveOptACol !== -1 ? row[effectiveOptACol]?.trim() : '';
+        const b = effectiveOptBCol !== -1 ? row[effectiveOptBCol]?.trim() : '';
+        const c = effectiveOptCCol !== -1 ? row[effectiveOptCCol]?.trim() : '';
+        const d = effectiveOptDCol !== -1 ? row[effectiveOptDCol]?.trim() : '';
         rawOptions = [a, b, c, d].filter(Boolean);
       } else if (optCombinedCol !== -1 && row[optCombinedCol]?.trim()) {
         rawOptions = splitOptionsString(row[optCombinedCol]);
@@ -750,7 +787,7 @@ function parseRowBasedQuestionsCSV(
         });
       }
 
-      const rawAns = ansCol !== -1 ? row[ansCol]?.trim() : '';
+      const rawAns = effectiveAnsCol !== -1 ? row[effectiveAnsCol]?.trim() : '';
       if (rawAns && options) {
         correctIndex = parseCorrectAnswer(rawAns, options);
       }
@@ -1049,11 +1086,27 @@ export async function syncGoogleSheetWithTabs(
     throw new Error('請提供「題庫明細」分頁的發布 CSV 網址或試算表網址');
   }
 
+  // Save config immediately to localStorage so inputs are never lost
+  try {
+    localStorage.setItem(CSV_STORAGE_KEYS.QUESTIONS_URL, questionsUrl.trim());
+    if (questionsGid !== undefined && String(questionsGid).trim() !== '') {
+      localStorage.setItem(CSV_STORAGE_KEYS.QUESTIONS_GID, String(questionsGid).trim());
+    }
+    if (topicsUrl?.trim()) {
+      localStorage.setItem(CSV_STORAGE_KEYS.TOPICS_URL, topicsUrl.trim());
+    }
+    if (topicsGid !== undefined && String(topicsGid).trim() !== '') {
+      localStorage.setItem(CSV_STORAGE_KEYS.TOPICS_GID, String(topicsGid).trim());
+    }
+    localStorage.setItem(CSV_STORAGE_KEYS.SYNC_TOPICS_TAB, String(syncTopicsTab));
+  } catch {}
+
   // 1. Fetch Questions Tab CSV
   const normalizedQuestionsUrl = normalizeGoogleSheetCSVUrl(questionsUrl, questionsGid);
   const questionsCsvText = await fetchCSVFromUrl(normalizedQuestionsUrl);
 
   let finalTopics: WeeklyTopic[] = [];
+  let baseTopics: WeeklyTopic[] = [];
 
   // 2. Fetch Topics Tab CSV if requested/available
   const effectiveTopicsUrl = topicsUrl?.trim() || (
@@ -1066,7 +1119,7 @@ export async function syncGoogleSheetWithTabs(
     try {
       const normalizedTopicsUrl = normalizeGoogleSheetCSVUrl(effectiveTopicsUrl, topicsGid ?? 0);
       const topicsCsvText = await fetchCSVFromUrl(normalizedTopicsUrl);
-      const baseTopics = parseTopicsFromCSV(topicsCsvText, existingTopics);
+      baseTopics = parseTopicsFromCSV(topicsCsvText, existingTopics);
 
       if (baseTopics.length > 0) {
         finalTopics = correlateTopicsAndQuestions(baseTopics, questionsCsvText);
@@ -1076,29 +1129,24 @@ export async function syncGoogleSheetWithTabs(
     }
   }
 
-  // If topics were not built yet, parse questions directly
-  if (finalTopics.length === 0) {
-    finalTopics = parseTopicsFromCSV(questionsCsvText, existingTopics);
+  // If topics were not built, or if no questions were attached, parse questions CSV directly
+  const totalQuestionsAttached = finalTopics.reduce((acc, t) => acc + t.questions.length, 0);
+  if (finalTopics.length === 0 || totalQuestionsAttached === 0) {
+    const directTopics = parseTopicsFromCSV(questionsCsvText, baseTopics.length > 0 ? baseTopics : existingTopics);
+    if (directTopics.length > 0) {
+      finalTopics = directTopics;
+    }
   }
 
   if (finalTopics.length === 0) {
     throw new Error('試算表讀取成功，但未能解析出任何主題或題目卡片，請確認「所屬主題ID」與「階段」欄位');
   }
 
-  // Save config & sync time locally
+  // Update sync cache & time locally
   try {
-    localStorage.setItem(CSV_STORAGE_KEYS.QUESTIONS_URL, questionsUrl.trim());
-    if (questionsGid !== undefined && String(questionsGid).trim() !== '') {
-      localStorage.setItem(CSV_STORAGE_KEYS.QUESTIONS_GID, String(questionsGid).trim());
-    }
-    if (topicsUrl?.trim()) {
-      localStorage.setItem(CSV_STORAGE_KEYS.TOPICS_URL, topicsUrl.trim());
-    }
-    if (topicsGid !== undefined && String(topicsGid).trim() !== '') {
-      localStorage.setItem(CSV_STORAGE_KEYS.TOPICS_GID, String(topicsGid).trim());
-    }
     localStorage.setItem(CSV_STORAGE_KEYS.CSV_URL, normalizedQuestionsUrl);
     localStorage.setItem(CSV_STORAGE_KEYS.LAST_SYNC_TIME, String(Date.now()));
+    localStorage.setItem(APP_TOPICS_STORAGE_KEY, JSON.stringify(finalTopics));
   } catch {}
 
   // Sync to Cloud Firestore so all room members get it in real-time

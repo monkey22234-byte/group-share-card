@@ -239,13 +239,14 @@ export default function App() {
       const questionsGid = localStorage.getItem(CSV_STORAGE_KEYS.QUESTIONS_GID) || undefined;
       const topicsUrl = localStorage.getItem(CSV_STORAGE_KEYS.TOPICS_URL) || undefined;
       const topicsGid = localStorage.getItem(CSV_STORAGE_KEYS.TOPICS_GID) || undefined;
+      const syncTopicsTab = localStorage.getItem(CSV_STORAGE_KEYS.SYNC_TOPICS_TAB) !== 'false';
 
       syncGoogleSheetWithTabs({
         questionsUrl: savedQuestionsUrl.trim(),
         questionsGid,
         topicsUrl,
         topicsGid,
-        syncTopicsTab: true,
+        syncTopicsTab,
       })
         .then((result) => {
           if (result && result.topics.length > 0) {

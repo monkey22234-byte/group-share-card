@@ -82,16 +82,51 @@ export const GoogleSheetDatabaseModal: React.FC<GoogleSheetDatabaseModalProps> =
     if (savedQ) {
       setQuestionsUrl(savedQ);
       const extractedQ = extractGidFromUrl(savedQ);
-      if (extractedQ) setQuestionsGid(extractedQ);
+      const savedQGid = localStorage.getItem(CSV_STORAGE_KEYS.QUESTIONS_GID);
+      if (savedQGid) {
+        setQuestionsGid(savedQGid);
+      } else if (extractedQ) {
+        setQuestionsGid(extractedQ);
+      }
     }
 
     const savedT = localStorage.getItem(CSV_STORAGE_KEYS.TOPICS_URL);
     if (savedT) {
       setTopicsUrl(savedT);
       const extractedT = extractGidFromUrl(savedT);
-      if (extractedT) setTopicsGid(extractedT);
+      const savedTGid = localStorage.getItem(CSV_STORAGE_KEYS.TOPICS_GID);
+      if (savedTGid) {
+        setTopicsGid(savedTGid);
+      } else if (extractedT) {
+        setTopicsGid(extractedT);
+      }
+    }
+
+    const savedSyncTab = localStorage.getItem(CSV_STORAGE_KEYS.SYNC_TOPICS_TAB);
+    if (savedSyncTab !== null) {
+      setSyncTopicsTab(savedSyncTab !== 'false');
     }
   }, [isOpen]);
+
+  // Persist settings to localStorage on any change
+  useEffect(() => {
+    try {
+      if (questionsUrl.trim()) {
+        localStorage.setItem(CSV_STORAGE_KEYS.QUESTIONS_URL, questionsUrl.trim());
+        localStorage.setItem(CSV_STORAGE_KEYS.CSV_URL, questionsUrl.trim());
+      }
+      if (questionsGid.trim()) {
+        localStorage.setItem(CSV_STORAGE_KEYS.QUESTIONS_GID, questionsGid.trim());
+      }
+      if (topicsUrl.trim()) {
+        localStorage.setItem(CSV_STORAGE_KEYS.TOPICS_URL, topicsUrl.trim());
+      }
+      if (topicsGid.trim()) {
+        localStorage.setItem(CSV_STORAGE_KEYS.TOPICS_GID, topicsGid.trim());
+      }
+      localStorage.setItem(CSV_STORAGE_KEYS.SYNC_TOPICS_TAB, String(syncTopicsTab));
+    } catch {}
+  }, [questionsUrl, questionsGid, topicsUrl, topicsGid, syncTopicsTab]);
 
   // When user pastes/types in questionsUrl, auto-detect gid if present
   const handleQuestionsUrlChange = (val: string) => {
@@ -100,6 +135,10 @@ export const GoogleSheetDatabaseModal: React.FC<GoogleSheetDatabaseModalProps> =
     if (extracted && !questionsGid) {
       setQuestionsGid(extracted);
     }
+    try {
+      localStorage.setItem(CSV_STORAGE_KEYS.QUESTIONS_URL, val.trim());
+      localStorage.setItem(CSV_STORAGE_KEYS.CSV_URL, val.trim());
+    } catch {}
   };
 
   const handleTopicsUrlChange = (val: string) => {
@@ -108,6 +147,9 @@ export const GoogleSheetDatabaseModal: React.FC<GoogleSheetDatabaseModalProps> =
     if (extracted) {
       setTopicsGid(extracted);
     }
+    try {
+      localStorage.setItem(CSV_STORAGE_KEYS.TOPICS_URL, val.trim());
+    } catch {}
   };
 
   if (!isOpen) return null;
@@ -411,6 +453,11 @@ export const GoogleSheetDatabaseModal: React.FC<GoogleSheetDatabaseModalProps> =
                   <p>• <b>『應用』</b> ➜ 應用行動題卡片（嚴格 1 題）</p>
                   <p>• <b>『所屬主題ID』</b> ➜ 自動對應到『每週主題』之主題ID，選取該週主題即刻呈現該週全部卡片！</p>
                 </div>
+              </div>
+
+              <div className="flex items-center gap-2 text-[11px] text-emerald-900 bg-emerald-50/90 px-3.5 py-2.5 rounded-xl border border-emerald-200">
+                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>已自動儲存至本機快取（localStorage）。重新開啟或重新整理網頁時，APP 將在背景自動讀取並 Fetch 同步，不需每次手動重新貼上！</span>
               </div>
 
               <button
