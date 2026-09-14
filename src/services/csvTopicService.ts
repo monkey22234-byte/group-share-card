@@ -11,6 +11,68 @@ export const CSV_STORAGE_KEYS = {
   LAST_SYNC_TIME: 'smallgroup_csv_last_sync_v1',
 };
 
+/**
+ * 預設 Google 試算表 CSV 發布網址設定 (無痕模式 / 初次載入 Fallback)
+ * 解決無痕模式或初次開啟時 localStorage 為空導致「0 題」問題。
+ * 支援透過環境變數 VITE_DEFAULT_QUESTIONS_CSV_URL 及 VITE_DEFAULT_TOPICS_CSV_URL 設定，
+ * 亦可直接在下方常數設定您的「題庫明細」與「每週主題」發布網址。
+ */
+export const DEFAULT_CSV_CONFIG = {
+  // 題庫明細 (Questions tab - 分頁2) 預設發布網址
+  QUESTIONS_URL:
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_DEFAULT_QUESTIONS_CSV_URL) ||
+    'https://docs.google.com/spreadsheets/d/e/2PACX-1vT17x8Y4X_group_questions_demo/pub?gid=0&single=true&output=csv',
+  QUESTIONS_GID: '',
+  // 每週主題 (Weekly Topics tab - 分頁1) 預設發布網址
+  TOPICS_URL:
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_DEFAULT_TOPICS_CSV_URL) ||
+    'https://docs.google.com/spreadsheets/d/e/2PACX-1vT17x8Y4X_group_topics_demo/pub?gid=0&single=true&output=csv',
+  TOPICS_GID: '0',
+  SYNC_TOPICS_TAB: true,
+};
+
+/**
+ * 取得當前有效的 CSV 設定（優先讀取使用者儲存在 localStorage 中的網址，若無資料則自動回退至預設網址）
+ */
+export function getEffectiveCsvConfig(): {
+  questionsUrl: string;
+  questionsGid: string;
+  topicsUrl: string;
+  topicsGid: string;
+  syncTopicsTab: boolean;
+} {
+  const savedQuestionsUrl =
+    typeof window !== 'undefined'
+      ? localStorage.getItem(CSV_STORAGE_KEYS.QUESTIONS_URL) ||
+        localStorage.getItem(CSV_STORAGE_KEYS.CSV_URL) ||
+        ''
+      : '';
+  const savedQuestionsGid =
+    typeof window !== 'undefined'
+      ? localStorage.getItem(CSV_STORAGE_KEYS.QUESTIONS_GID) || ''
+      : '';
+  const savedTopicsUrl =
+    typeof window !== 'undefined'
+      ? localStorage.getItem(CSV_STORAGE_KEYS.TOPICS_URL) || ''
+      : '';
+  const savedTopicsGid =
+    typeof window !== 'undefined'
+      ? localStorage.getItem(CSV_STORAGE_KEYS.TOPICS_GID) || ''
+      : '';
+  const savedSyncTab =
+    typeof window !== 'undefined'
+      ? localStorage.getItem(CSV_STORAGE_KEYS.SYNC_TOPICS_TAB)
+      : null;
+
+  return {
+    questionsUrl: savedQuestionsUrl.trim() || DEFAULT_CSV_CONFIG.QUESTIONS_URL.trim(),
+    questionsGid: savedQuestionsGid.trim() || DEFAULT_CSV_CONFIG.QUESTIONS_GID.trim(),
+    topicsUrl: savedTopicsUrl.trim() || DEFAULT_CSV_CONFIG.TOPICS_URL.trim(),
+    topicsGid: savedTopicsGid.trim() || DEFAULT_CSV_CONFIG.TOPICS_GID.trim(),
+    syncTopicsTab: savedSyncTab !== null ? savedSyncTab !== 'false' : DEFAULT_CSV_CONFIG.SYNC_TOPICS_TAB,
+  };
+}
+
 export const APP_TOPICS_STORAGE_KEY = 'smallgroup_topics_v1';
 
 /**
@@ -1011,19 +1073,30 @@ export function normalizeGoogleSheetCSVUrl(inputUrl: string, explicitGid?: strin
 }
 
 /**
- * Fetch CSV text dynamically from URL (Direct fetch with server proxy fallback for CORS)
+ * Fetch CSV text dynamically from URL (Direct fetch with server proxy fallback for CORS and strict timeout)
  */
-export async function fetchCSVFromUrl(rawUrl: string, explicitGid?: string | number): Promise<string> {
+export async function fetchCSVFromUrl(
+  rawUrl: string,
+  explicitGid?: string | number,
+  timeoutMs = 7500
+): Promise<string> {
   const normalizedUrl = normalizeGoogleSheetCSVUrl(rawUrl, explicitGid);
+  if (!normalizedUrl) {
+    throw new Error('請提供有效的 Google 試算表 CSV 發布網址');
+  }
 
-  // 1. Try direct fetch first
+  // 1. Try direct fetch first with timeout
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     const response = await fetch(normalizedUrl, {
       method: 'GET',
       headers: {
         Accept: 'text/csv, text/plain, */*',
       },
+      signal: controller.signal,
     });
+    clearTimeout(timer);
 
     if (response.ok) {
       const text = await response.text();
@@ -1031,28 +1104,41 @@ export async function fetchCSVFromUrl(rawUrl: string, explicitGid?: string | num
         return text;
       }
     }
-  } catch (err) {
-    console.warn('Direct CSV fetch failed, falling back to server proxy:', err);
+  } catch (err: any) {
+    console.warn('Direct CSV fetch failed, falling back to server proxy:', err?.message || err);
   }
 
-  // 2. Fallback to server proxy /api/fetch-csv?url=...
-  const proxyUrl = `/api/fetch-csv?url=${encodeURIComponent(normalizedUrl)}`;
-  const proxyResponse = await fetch(proxyUrl);
-  if (!proxyResponse.ok) {
-    const errJson = await proxyResponse.json().catch(() => ({}));
-    throw new Error(errJson.error || `載入 CSV 失敗（HTTP ${proxyResponse.status}）`);
-  }
+  // 2. Fallback to server proxy /api/fetch-csv?url=... with timeout
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const proxyUrl = `/api/fetch-csv?url=${encodeURIComponent(normalizedUrl)}`;
+    const proxyResponse = await fetch(proxyUrl, { signal: controller.signal });
+    clearTimeout(timer);
 
-  const csvText = await proxyResponse.text();
-  if (!csvText || csvText.trim().startsWith('<!DOCTYPE html>')) {
-    throw new Error('取得的內容並非有效 CSV，請確認試算表已「發布至網路」為 CSV 格式');
-  }
+    if (!proxyResponse.ok) {
+      const errJson = await proxyResponse.json().catch(() => ({}));
+      throw new Error(errJson.error || `載入 CSV 失敗（HTTP ${proxyResponse.status}）`);
+    }
 
-  return csvText;
+    const csvText = await proxyResponse.text();
+    if (!csvText || csvText.trim().startsWith('<!DOCTYPE html>')) {
+      throw new Error(
+        '取得的內容為 HTML 網頁而非 CSV 資料。請確認試算表已「檔案」>「共用」>「發布至網路」，並將格式選為「逗號分隔值 (.csv)」！'
+      );
+    }
+
+    return csvText;
+  } catch (proxyErr: any) {
+    if (proxyErr.name === 'AbortError') {
+      throw new Error('讀取試算表逾時（超過 7.5 秒）。請確認網路正常，且該試算表已設為公開或發布至網路。');
+    }
+    throw proxyErr;
+  }
 }
 
 export interface MultiTabSyncOptions {
-  questionsUrl: string;
+  questionsUrl?: string;
   questionsGid?: string | number;
   topicsUrl?: string;
   topicsGid?: string | number;
@@ -1073,16 +1159,16 @@ export async function syncGoogleSheetWithTabs(
   totalQuestions: number;
   topicsCount: number;
 }> {
-  const {
-    questionsUrl,
-    questionsGid,
-    topicsUrl,
-    topicsGid,
-    syncTopicsTab = true,
-    existingTopics,
-  } = options;
+  const fallbackConfig = getEffectiveCsvConfig();
 
-  if (!questionsUrl?.trim()) {
+  const questionsUrl = (options.questionsUrl || fallbackConfig.questionsUrl || '').trim();
+  const questionsGid = options.questionsGid !== undefined ? String(options.questionsGid).trim() : fallbackConfig.questionsGid;
+  const topicsUrl = (options.topicsUrl || fallbackConfig.topicsUrl || '').trim();
+  const topicsGid = options.topicsGid !== undefined ? String(options.topicsGid).trim() : fallbackConfig.topicsGid;
+  const syncTopicsTab = options.syncTopicsTab !== undefined ? options.syncTopicsTab : fallbackConfig.syncTopicsTab;
+  const existingTopics = options.existingTopics;
+
+  if (!questionsUrl) {
     throw new Error('請提供「題庫明細」分頁的發布 CSV 網址或試算表網址');
   }
 

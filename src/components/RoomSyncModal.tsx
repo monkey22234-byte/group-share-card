@@ -158,6 +158,12 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
     onClose();
   };
 
+  const handleBrowseAsGuest = () => {
+    const defaultName = inputMemberName.trim() || '組員';
+    onSetCurrentUserName(defaultName);
+    onClose();
+  };
+
   const copyRoomCode = () => {
     if (!currentRoom) return;
     navigator.clipboard.writeText(currentRoom.roomCode);
@@ -175,8 +181,18 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-stone-200 overflow-hidden flex flex-col max-h-[92vh]">
+    <div 
+      className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs touch-manipulation animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isLoading && !disableClose) {
+          onClose();
+        }
+      }}
+    >
+      <div 
+        className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-stone-200 overflow-hidden flex flex-col max-h-[92vh] touch-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Modal Header */}
         <div className="p-4 sm:p-5 bg-gradient-to-r from-stone-900 to-stone-800 text-white flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -460,18 +476,25 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
                 </form>
               )}
 
-              {/* Offline fallback button when not in error state */}
-              {!errorMessage && (
-                <div className="pt-2 text-center">
+              {/* Guest mode & Offline fallback buttons */}
+              <div className="pt-2 text-center flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={handleBrowseAsGuest}
+                  className="w-full py-2.5 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer touch-manipulation active:scale-95"
+                >
+                  <span>👋 先以訪客身分體驗題庫卡片</span>
+                </button>
+                {!errorMessage && (
                   <button
                     type="button"
                     onClick={handleEnterLocalMode}
-                    className="text-xs text-stone-500 hover:text-stone-800 underline underline-offset-2 transition"
+                    className="text-xs text-stone-500 hover:text-stone-800 underline underline-offset-2 transition py-0.5"
                   >
                     不需要多裝置同步？點此直接以「單機模式」開始聚會
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </>
           )}
 

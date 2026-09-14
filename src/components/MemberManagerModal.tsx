@@ -69,8 +69,16 @@ export const MemberManagerModal: React.FC<MemberManagerModalProps> = ({
   const sharedCount = members.filter((m) => m.hasShared).length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white rounded-3xl max-w-md w-full max-h-[85vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
+    <div 
+      className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs touch-manipulation animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="bg-white rounded-3xl max-w-md w-full max-h-[88vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden touch-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-5 border-b border-stone-200 bg-stone-900 text-stone-100 flex items-center justify-between">
           <div className="flex items-center gap-2.5">

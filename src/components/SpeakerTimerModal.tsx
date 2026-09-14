@@ -49,8 +49,16 @@ export const SpeakerTimerModal: React.FC<SpeakerTimerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-stone-900 text-stone-100 rounded-3xl max-w-md w-full shadow-2xl border border-stone-800 p-6 flex flex-col items-center">
+    <div 
+      className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs touch-manipulation animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="bg-stone-900 text-stone-100 rounded-3xl max-w-md w-full shadow-2xl border border-stone-800 p-5 sm:p-6 flex flex-col items-center touch-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Top Header */}
         <div className="w-full flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">

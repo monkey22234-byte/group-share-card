@@ -61,7 +61,7 @@ export const ReactionFloatingBar: React.FC<ReactionFloatingBarProps> = ({
   return (
     <>
       {/* Floating Particles Canvas Overlay */}
-      <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+      <div className="fixed inset-0 pointer-events-none z-35 overflow-hidden">
         <AnimatePresence>
           {particles.map((p) => (
             <motion.div

@@ -13,7 +13,8 @@ import {
 import { 
   CSV_STORAGE_KEYS, 
   syncTopicsFromCSV, 
-  syncGoogleSheetWithTabs 
+  syncGoogleSheetWithTabs,
+  getEffectiveCsvConfig 
 } from './services/csvTopicService';
 import { Header } from './components/Header';
 import { StageNav } from './components/StageNav';
@@ -93,7 +94,7 @@ export default function App() {
   // Close is disabled until the user inputs their name and joins a room
   const isCloseDisabled = !hasJoinedRoom || !currentUserName.trim() || !liveRoom;
 
-  // Topics Database (Loaded 100% dynamically from Google Sheet CSV or Firestore; zero default mock data)
+  // Topics Database (Loaded dynamically with DEFAULT_TOPICS as robust fallback for incognito / first-load)
   const [topics, setTopics] = useState<WeeklyTopic[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.TOPICS);
@@ -113,7 +114,7 @@ export default function App() {
         }
       }
     } catch {}
-    return [];
+    return DEFAULT_TOPICS;
   });
 
   const [currentTopicId, setCurrentTopicId] = useState<string>(() => {
@@ -121,7 +122,7 @@ export default function App() {
       const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_TOPIC_ID);
       if (saved) return saved;
     } catch {}
-    return '';
+    return DEFAULT_TOPICS[0]?.id || '';
   });
 
   // Current stage & Card index
@@ -232,21 +233,17 @@ export default function App() {
     };
   }, []);
 
-  // Dynamically sync from user's Google Sheet CSV on launch if URL is configured
+  // Dynamically sync from Google Sheet CSV on launch (using effective config with fallback)
   useEffect(() => {
-    const savedQuestionsUrl = localStorage.getItem(CSV_STORAGE_KEYS.QUESTIONS_URL) || localStorage.getItem(CSV_STORAGE_KEYS.CSV_URL);
-    if (savedQuestionsUrl && savedQuestionsUrl.trim()) {
-      const questionsGid = localStorage.getItem(CSV_STORAGE_KEYS.QUESTIONS_GID) || undefined;
-      const topicsUrl = localStorage.getItem(CSV_STORAGE_KEYS.TOPICS_URL) || undefined;
-      const topicsGid = localStorage.getItem(CSV_STORAGE_KEYS.TOPICS_GID) || undefined;
-      const syncTopicsTab = localStorage.getItem(CSV_STORAGE_KEYS.SYNC_TOPICS_TAB) !== 'false';
-
+    const config = getEffectiveCsvConfig();
+    if (config.questionsUrl && config.questionsUrl.trim()) {
       syncGoogleSheetWithTabs({
-        questionsUrl: savedQuestionsUrl.trim(),
-        questionsGid,
-        topicsUrl,
-        topicsGid,
-        syncTopicsTab,
+        questionsUrl: config.questionsUrl.trim(),
+        questionsGid: config.questionsGid || undefined,
+        topicsUrl: config.topicsUrl || undefined,
+        topicsGid: config.topicsGid || undefined,
+        syncTopicsTab: config.syncTopicsTab,
+        existingTopics: topics,
       })
         .then((result) => {
           if (result && result.topics.length > 0) {
@@ -257,7 +254,8 @@ export default function App() {
           }
         })
         .catch((err) => {
-          console.warn('Background Google Sheet CSV auto-sync skipped/failed:', err);
+          // Gracefully log warning without blocking or freezing the UI
+          console.warn('Google Sheet CSV auto-sync warning (fallback to current topics):', err?.message || err);
         });
     }
   }, []);
@@ -858,11 +856,9 @@ export default function App() {
       <RoomSyncModal
         isOpen={isRoomModalOpen}
         onClose={() => {
-          if (!isCloseDisabled) {
-            setIsRoomModalOpen(false);
-          }
+          setIsRoomModalOpen(false);
         }}
-        disableClose={isCloseDisabled}
+        disableClose={false}
         currentRoom={liveRoom}
         currentUserRole={currentUserRole}
         currentUserName={currentUserName}

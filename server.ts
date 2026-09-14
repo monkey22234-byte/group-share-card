@@ -40,16 +40,21 @@ app.get("/api/fetch-csv", async (req, res) => {
       return res.status(400).json({ error: "請提供試算表 CSV 網址" });
     }
 
+    // 8 second timeout to prevent hanging connections
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
     const response = await fetch(rawUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; SmallGroupApp/1.0)",
         Accept: "text/csv, text/plain, */*",
       },
-    });
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeoutId));
 
     if (!response.ok) {
       return res.status(response.status).json({
-        error: `載入試算表失敗 (${response.status} ${response.statusText})，請確認連結已「發布至網路」或設為「知道連結的人均可檢視」`,
+        error: `載入試算表失敗 (${response.status} ${response.statusText})，請確認連結已「發布至網路」為 CSV 格式，且權限設為知道連結者可檢視`,
       });
     }
 
@@ -58,7 +63,10 @@ app.get("/api/fetch-csv", async (req, res) => {
     res.send(csvText);
   } catch (err: any) {
     console.error("Fetch CSV error:", err);
-    res.status(500).json({ error: err.message || "讀取 CSV 失敗" });
+    if (err.name === "AbortError") {
+      return res.status(504).json({ error: "連線至 Google 試算表逾時（超過 8 秒），請檢查網路狀態或確認試算表網址。" });
+    }
+    res.status(500).json({ error: err.message || "讀取 CSV 失敗，請確認試算表網址是否正確且已公開" });
   }
 });
 

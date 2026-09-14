@@ -48,8 +48,16 @@ export const TopicSelectorModal: React.FC<TopicSelectorModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
+    <div 
+      className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs touch-manipulation animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden touch-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-5 sm:p-6 border-b border-stone-200 flex items-center justify-between bg-stone-900 text-stone-100">
           <div>
@@ -140,7 +148,7 @@ export const TopicSelectorModal: React.FC<TopicSelectorModalProps> = ({
                     onSelectTopic(topic.id);
                     onClose();
                   }}
-                  className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer touch-manipulation select-none flex flex-col sm:flex-row sm:items-center justify-between gap-3 active:scale-[0.99] ${
                     isSelected
                       ? 'bg-emerald-50/90 border-emerald-500 shadow-sm'
                       : 'bg-white border-stone-200/90 hover:border-emerald-300 hover:shadow-sm'

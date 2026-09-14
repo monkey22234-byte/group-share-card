@@ -26,9 +26,12 @@ import {
   extractGidFromUrl,
   correlateTopicsAndQuestions,
   CSV_STORAGE_KEYS,
+  DEFAULT_CSV_CONFIG,
+  getEffectiveCsvConfig,
   SAMPLE_ROW_BASED_CSV_TEMPLATE,
   SAMPLE_TOPICS_CSV_TEMPLATE
 } from '../services/csvTopicService';
+import { DEFAULT_TOPICS } from '../data/defaultTopics';
 import { seedCloudTopics } from '../services/firebaseSync';
 
 interface GoogleSheetDatabaseModalProps {
@@ -47,19 +50,23 @@ export const GoogleSheetDatabaseModal: React.FC<GoogleSheetDatabaseModalProps> =
   // Questions tab (題庫明細)
   const [questionsUrl, setQuestionsUrl] = useState(() => {
     return localStorage.getItem(CSV_STORAGE_KEYS.QUESTIONS_URL) || 
-           localStorage.getItem(CSV_STORAGE_KEYS.CSV_URL) || '';
+           localStorage.getItem(CSV_STORAGE_KEYS.CSV_URL) || 
+           DEFAULT_CSV_CONFIG.QUESTIONS_URL;
   });
   const [questionsGid, setQuestionsGid] = useState(() => {
-    return localStorage.getItem(CSV_STORAGE_KEYS.QUESTIONS_GID) || '';
+    return localStorage.getItem(CSV_STORAGE_KEYS.QUESTIONS_GID) || 
+           DEFAULT_CSV_CONFIG.QUESTIONS_GID;
   });
 
   // Topics tab (每週主題)
   const [syncTopicsTab, setSyncTopicsTab] = useState(true);
   const [topicsUrl, setTopicsUrl] = useState(() => {
-    return localStorage.getItem(CSV_STORAGE_KEYS.TOPICS_URL) || '';
+    return localStorage.getItem(CSV_STORAGE_KEYS.TOPICS_URL) || 
+           DEFAULT_CSV_CONFIG.TOPICS_URL;
   });
   const [topicsGid, setTopicsGid] = useState(() => {
-    return localStorage.getItem(CSV_STORAGE_KEYS.TOPICS_GID) || '0';
+    return localStorage.getItem(CSV_STORAGE_KEYS.TOPICS_GID) || 
+           DEFAULT_CSV_CONFIG.TOPICS_GID;
   });
 
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(() => {
@@ -75,6 +82,29 @@ export const GoogleSheetDatabaseModal: React.FC<GoogleSheetDatabaseModalProps> =
   const [successMsg, setSuccessMsg] = useState('');
   const [showTutorial, setShowTutorial] = useState(false);
   const [showAdvancedGid, setShowAdvancedGid] = useState(false);
+
+  const handleResetToDefaultUrls = () => {
+    setQuestionsUrl(DEFAULT_CSV_CONFIG.QUESTIONS_URL);
+    setQuestionsGid(DEFAULT_CSV_CONFIG.QUESTIONS_GID);
+    setTopicsUrl(DEFAULT_CSV_CONFIG.TOPICS_URL);
+    setTopicsGid(DEFAULT_CSV_CONFIG.TOPICS_GID);
+    setSyncTopicsTab(true);
+    try {
+      localStorage.setItem(CSV_STORAGE_KEYS.QUESTIONS_URL, DEFAULT_CSV_CONFIG.QUESTIONS_URL);
+      localStorage.setItem(CSV_STORAGE_KEYS.CSV_URL, DEFAULT_CSV_CONFIG.QUESTIONS_URL);
+      localStorage.setItem(CSV_STORAGE_KEYS.QUESTIONS_GID, DEFAULT_CSV_CONFIG.QUESTIONS_GID);
+      localStorage.setItem(CSV_STORAGE_KEYS.TOPICS_URL, DEFAULT_CSV_CONFIG.TOPICS_URL);
+      localStorage.setItem(CSV_STORAGE_KEYS.TOPICS_GID, DEFAULT_CSV_CONFIG.TOPICS_GID);
+    } catch {}
+    setSuccessMsg('已載入預設試算表網址，請點擊下方「立即動態連動同步 Google 試算表」！');
+    setErrorMsg('');
+  };
+
+  const handleLoadBuiltInFallback = () => {
+    onTopicsUpdated(DEFAULT_TOPICS);
+    setSuccessMsg('已載入內建模範題庫（2026-W35 與 2026-W36）！');
+    setErrorMsg('');
+  };
 
   useEffect(() => {
     const savedQ = localStorage.getItem(CSV_STORAGE_KEYS.QUESTIONS_URL) || 
@@ -238,8 +268,16 @@ export const GoogleSheetDatabaseModal: React.FC<GoogleSheetDatabaseModalProps> =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-stone-200 overflow-hidden flex flex-col max-h-[92vh]">
+    <div 
+      className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs touch-manipulation animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isLoading) onClose();
+      }}
+    >
+      <div 
+        className="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-stone-200 overflow-hidden flex flex-col max-h-[92vh] touch-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-5 border-b border-stone-200 flex items-center justify-between bg-stone-900 text-stone-100 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -255,7 +293,7 @@ export const GoogleSheetDatabaseModal: React.FC<GoogleSheetDatabaseModalProps> =
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-stone-400 hover:text-white hover:bg-stone-800 transition"
+            className="p-1.5 rounded-xl text-stone-400 hover:text-white hover:bg-stone-800 transition cursor-pointer touch-manipulation"
           >
             <X className="w-5 h-5" />
           </button>
@@ -266,7 +304,7 @@ export const GoogleSheetDatabaseModal: React.FC<GoogleSheetDatabaseModalProps> =
           <button
             type="button"
             onClick={() => setActiveTab('url')}
-            className={`flex-1 py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition ${
+            className={`flex-1 py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition cursor-pointer touch-manipulation ${
               activeTab === 'url'
                 ? 'border-emerald-600 text-emerald-800 bg-white'
                 : 'border-transparent text-stone-500 hover:text-stone-800'
@@ -278,7 +316,7 @@ export const GoogleSheetDatabaseModal: React.FC<GoogleSheetDatabaseModalProps> =
           <button
             type="button"
             onClick={() => setActiveTab('paste')}
-            className={`flex-1 py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition ${
+            className={`flex-1 py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition cursor-pointer touch-manipulation ${
               activeTab === 'paste'
                 ? 'border-emerald-600 text-emerald-800 bg-white'
                 : 'border-transparent text-stone-500 hover:text-stone-800'
@@ -300,9 +338,27 @@ export const GoogleSheetDatabaseModal: React.FC<GoogleSheetDatabaseModalProps> =
           )}
 
           {errorMsg && (
-            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-              <span className="leading-relaxed">{errorMsg}</span>
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex flex-col gap-2">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">{errorMsg}</span>
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1 border-t border-rose-200/60">
+                <button
+                  type="button"
+                  onClick={handleResetToDefaultUrls}
+                  className="px-2.5 py-1.5 rounded-lg bg-white border border-rose-300 text-rose-900 font-bold text-[11px] hover:bg-rose-100 transition cursor-pointer touch-manipulation"
+                >
+                  恢復預設試算表網址
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLoadBuiltInFallback}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-700 text-white font-bold text-[11px] hover:bg-emerald-800 transition cursor-pointer touch-manipulation"
+                >
+                  立即載入內建模範題庫
+                </button>
+              </div>
             </div>
           )}
 
