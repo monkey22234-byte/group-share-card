@@ -10,6 +10,11 @@ import {
   LiveReactionEvent,
   LiveAnswerVote
 } from './types';
+import { 
+  CSV_STORAGE_KEYS, 
+  syncTopicsFromCSV, 
+  syncGoogleSheetWithTabs 
+} from './services/csvTopicService';
 import { Header } from './components/Header';
 import { StageNav } from './components/StageNav';
 import { CardDeck } from './components/CardDeck';
@@ -21,6 +26,9 @@ import { GoogleSheetDatabaseModal } from './components/GoogleSheetDatabaseModal'
 import { SpeakerTimerModal } from './components/SpeakerTimerModal';
 import { MemberManagerModal } from './components/MemberManagerModal';
 import { RoomSyncModal } from './components/RoomSyncModal';
+import { WaitingLobby } from './components/WaitingLobby';
+import confetti from 'canvas-confetti';
+import { FileSpreadsheet } from 'lucide-react';
 import { setSoundMuted, getSoundMuted, playStageChime, playTimerFinishChime } from './utils/audio';
 import { 
   subscribeToRoom, 
@@ -29,7 +37,11 @@ import {
   updateRoomNavState, 
   submitLiveAction,
   sendLiveReaction,
-  joinLiveRoom
+  joinLiveRoom,
+  openLiveRoom,
+  subscribeToCloudTopics,
+  saveTopicToCloud,
+  seedCloudTopics
 } from './services/firebaseSync';
 
 const STORAGE_KEYS = {
@@ -52,14 +64,7 @@ const getStoredUserName = (): string => {
   return '';
 };
 
-const DEFAULT_MEMBERS: GroupMember[] = [
-  { id: 'm-1', name: '小明', avatarColor: '#3B82F6', hasShared: false },
-  { id: 'm-2', name: '小華', avatarColor: '#10B981', hasShared: false },
-  { id: 'm-3', name: '雅各', avatarColor: '#F59E0B', hasShared: false },
-  { id: 'm-4', name: '佳恩', avatarColor: '#EC4899', hasShared: false },
-  { id: 'm-5', name: '約翰', avatarColor: '#8B5CF6', hasShared: false },
-  { id: 'm-6', name: '宣宣', avatarColor: '#06B6D4', hasShared: false },
-];
+const DEFAULT_MEMBERS: GroupMember[] = [];
 
 export default function App() {
   // Check localStorage for currentUserName on startup
@@ -75,6 +80,10 @@ export default function App() {
 
   // Live Room State
   const [liveRoom, setLiveRoom] = useState<LiveRoomState | null>(null);
+  const liveRoomRef = useRef<LiveRoomState | null>(null);
+  useEffect(() => {
+    liveRoomRef.current = liveRoom;
+  }, [liveRoom]);
 
   // If currentUserName is not found in localStorage at startup, force auto-open RoomSyncModal
   const [isRoomModalOpen, setIsRoomModalOpen] = useState<boolean>(() => {
@@ -84,27 +93,35 @@ export default function App() {
   // Close is disabled until the user inputs their name and joins a room
   const isCloseDisabled = !hasJoinedRoom || !currentUserName.trim() || !liveRoom;
 
-  // Topics Database (Loaded from Google Sheet database or default authentic topics)
+  // Topics Database (Loaded 100% dynamically from Google Sheet CSV or Firestore; zero default mock data)
   const [topics, setTopics] = useState<WeeklyTopic[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.TOPICS);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const hasAuthentic = parsed.some((t: any) => t.id === '2026-W35' || t.id === '2026-W34');
-          if (hasAuthentic) return parsed;
+          // Guarantee strictly card limits per stage: 1 破冰, 5 回顧, 1 思想, 1 應用
+          return parsed.map((t: WeeklyTopic) => ({
+            ...t,
+            questions: [
+              ...t.questions.filter((q) => q.stage === 'icebreaker').slice(0, 1),
+              ...t.questions.filter((q) => q.stage === 'review').slice(0, 5),
+              ...t.questions.filter((q) => q.stage === 'reflection').slice(0, 1),
+              ...t.questions.filter((q) => q.stage === 'application').slice(0, 1),
+            ],
+          }));
         }
       }
     } catch {}
-    return DEFAULT_TOPICS;
+    return [];
   });
 
   const [currentTopicId, setCurrentTopicId] = useState<string>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_TOPIC_ID);
-      if (saved && (saved === '2026-W35' || saved === '2026-W34')) return saved;
+      if (saved) return saved;
     } catch {}
-    return DEFAULT_TOPICS[0].id;
+    return '';
   });
 
   // Current stage & Card index
@@ -116,41 +133,54 @@ export default function App() {
     application: 0,
   });
 
-  // Actions / Commitments state
+  // Actions / Commitments state (strictly clean from mock data)
   const [actions, setActions] = useState<ActionCommitment[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ACTIONS);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(
+            (a: any) => a && !String(a.id).startsWith('act-demo-') && a.memberName !== '小明' && a.memberName !== '佳恩'
+          );
+        }
+      }
     } catch {}
-    return [
-      {
-        id: 'act-demo-1',
-        memberName: '小明',
-        actionText: '這週每天早晨晨禱5分鐘，並背誦馬可福音4:39經文',
-        prayerNeeds: '為本週新專案報告求平靜心緒',
-        targetDate: '本週每日',
-        timestamp: Date.now() - 3600000,
-      },
-      {
-        id: 'act-demo-2',
-        memberName: '佳恩',
-        actionText: '主動打電話關心一位最近沒來小組的姊妹並為她祝福',
-        targetDate: '本週三前',
-        timestamp: Date.now() - 1800000,
-      },
-    ];
+    return [];
   });
 
-  // Group Members state
+  // Group Members state (strictly only real users who entered their names)
   const [members, setMembers] = useState<GroupMember[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.MEMBERS);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(
+            (m: any) =>
+              m &&
+              m.name &&
+              !['小明', '小華', '雅各', '佳恩', '約翰', '宣宣'].includes(m.name) &&
+              !String(m.id).startsWith('m-1') &&
+              !String(m.id).startsWith('m-2') &&
+              !String(m.id).startsWith('m-3') &&
+              !String(m.id).startsWith('m-4') &&
+              !String(m.id).startsWith('m-5') &&
+              !String(m.id).startsWith('m-6')
+          );
+          if (cleaned.length > 0) return cleaned;
+        }
+      }
     } catch {}
-    return DEFAULT_MEMBERS;
+    const myName = getStoredUserName();
+    return myName
+      ? [{ id: `m-self`, name: myName, avatarColor: '#3B82F6', hasShared: false }]
+      : [];
   });
 
-  const [activeSpeakerName, setActiveSpeakerName] = useState<string>('小明');
+  const [activeSpeakerName, setActiveSpeakerName] = useState<string>(() => {
+    return getStoredUserName() || '';
+  });
 
   // Sound Muted state
   const [isMuted, setIsMuted] = useState(false);
@@ -186,6 +216,65 @@ export default function App() {
     }
   }, []);
 
+  // Real-time Cloud Topics from Firestore Database
+  useEffect(() => {
+    const unsubTopics = subscribeToCloudTopics((cloudTopics) => {
+      if (cloudTopics && cloudTopics.length > 0) {
+        setTopics(cloudTopics);
+        try {
+          localStorage.setItem(STORAGE_KEYS.TOPICS, JSON.stringify(cloudTopics));
+        } catch {}
+      }
+    });
+
+    return () => {
+      unsubTopics();
+    };
+  }, []);
+
+  // Dynamically sync from user's Google Sheet CSV on launch if URL is configured
+  useEffect(() => {
+    const savedQuestionsUrl = localStorage.getItem(CSV_STORAGE_KEYS.QUESTIONS_URL) || localStorage.getItem(CSV_STORAGE_KEYS.CSV_URL);
+    if (savedQuestionsUrl && savedQuestionsUrl.trim()) {
+      const questionsGid = localStorage.getItem(CSV_STORAGE_KEYS.QUESTIONS_GID) || undefined;
+      const topicsUrl = localStorage.getItem(CSV_STORAGE_KEYS.TOPICS_URL) || undefined;
+      const topicsGid = localStorage.getItem(CSV_STORAGE_KEYS.TOPICS_GID) || undefined;
+
+      syncGoogleSheetWithTabs({
+        questionsUrl: savedQuestionsUrl.trim(),
+        questionsGid,
+        topicsUrl,
+        topicsGid,
+        syncTopicsTab: true,
+      })
+        .then((result) => {
+          if (result && result.topics.length > 0) {
+            setTopics(result.topics);
+            try {
+              localStorage.setItem(STORAGE_KEYS.TOPICS, JSON.stringify(result.topics));
+            } catch {}
+          }
+        })
+        .catch((err) => {
+          console.warn('Background Google Sheet CSV auto-sync skipped/failed:', err);
+        });
+    }
+  }, []);
+
+  // Auto-select first available topic when topics change if none is selected
+  useEffect(() => {
+    if (topics.length > 0) {
+      const active = topics.find((t) => t.id === currentTopicId);
+      if (!active || (active.questions.length === 0 && topics.some((t) => t.questions.length > 0))) {
+        const best = topics.find((t) => t.questions.length > 0) || topics[0];
+        setCurrentTopicId(best.id);
+        try {
+          localStorage.setItem(STORAGE_KEYS.CURRENT_TOPIC_ID, best.id);
+        } catch {}
+      }
+    }
+  }, [topics, currentTopicId]);
+
   // Firebase Real-time Room Sync Listener
   useEffect(() => {
     if (!liveRoom?.roomCode) return;
@@ -208,29 +297,42 @@ export default function App() {
       }
 
       // Sync card index
-      if (remoteRoom.currentCardIndex !== undefined && remoteRoom.currentStage) {
+      if (
+        remoteRoom.currentCardIndex !== undefined &&
+        remoteRoom.currentStage &&
+        remoteRoom.currentStage !== 'summary'
+      ) {
         setCardIndexByStage((prev) => ({
           ...prev,
           [remoteRoom.currentStage as QuestionStage]: remoteRoom.currentCardIndex,
         }));
       }
 
-      // Sync member list into local member picker
+      // Detect when leader opened room (waiting -> active)
+      if (liveRoomRef.current?.status === 'waiting' && remoteRoom.status === 'active') {
+        playStageChime();
+        confetti({
+          particleCount: 60,
+          spread: 70,
+          origin: { y: 0.6 },
+        });
+      }
+
+      // Sync member list into local member picker - strictly mirror remoteRoom.members
       if (Array.isArray(remoteRoom.members)) {
+        const palette = ['#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#06B6D4', '#6366F1', '#14B8A6'];
         setMembers((prev) => {
-          const existingNames = new Set(prev.map((m) => m.name));
-          const additions: GroupMember[] = [];
-          remoteRoom.members.forEach((mName) => {
-            if (!existingNames.has(mName)) {
-              additions.push({
-                id: `m-live-${Date.now()}-${mName}`,
-                name: mName,
-                avatarColor: '#10B981',
-                hasShared: false,
-              });
-            }
+          const prevMap = new Map(prev.map((m) => [m.name, m]));
+          return remoteRoom.members.map((mName, idx) => {
+            const existing = prevMap.get(mName);
+            if (existing) return existing;
+            return {
+              id: `m-room-${mName}`,
+              name: mName,
+              avatarColor: palette[idx % palette.length],
+              hasShared: false,
+            };
           });
-          return additions.length > 0 ? [...prev, ...additions] : prev;
         });
       }
 
@@ -281,19 +383,27 @@ export default function App() {
 
   // Current active topic
   const currentTopic = useMemo(() => {
-    return topics.find((t) => t.id === currentTopicId) || topics[0] || DEFAULT_TOPICS[0];
+    if (!topics || topics.length === 0) return null;
+    return topics.find((t) => t.id === currentTopicId) || topics[0] || null;
   }, [topics, currentTopicId]);
 
-  // Filter cards by current stage
+  // Filter cards by current stage (Application strictly 1 question from authentic database)
   const cardsInCurrentStage = useMemo(() => {
-    if (currentStage === 'summary') return [];
-    return currentTopic.questions.filter((q) => q.stage === currentStage);
+    if (currentStage === 'summary' || !currentTopic) return [];
+    const list = currentTopic.questions.filter((q) => q.stage === currentStage);
+    if (currentStage === 'application') {
+      return list.slice(0, 1);
+    }
+    return list;
   }, [currentTopic, currentStage]);
 
   // Progress for all stages
   const stageProgress = useMemo(() => {
     const calc = (stg: QuestionStage) => {
-      const list = currentTopic.questions.filter((q) => q.stage === stg);
+      let list = currentTopic ? currentTopic.questions.filter((q) => q.stage === stg) : [];
+      if (stg === 'application') {
+        list = list.slice(0, 1);
+      }
       const curr = cardIndexByStage[stg] || 0;
       return { current: Math.min(curr, Math.max(0, list.length - 1)), total: list.length };
     };
@@ -328,13 +438,11 @@ export default function App() {
   // Push local changes to Firebase room if user is host or room is active
   const syncNavToRoom = (nextStage: QuestionStage | 'summary', nextCardIdx: number, topicId?: string) => {
     if (liveRoom && !isRemoteUpdatingRef.current) {
-      if (nextStage !== 'summary') {
-        updateRoomNavState(liveRoom.roomCode, {
-          currentStage: nextStage,
-          currentCardIndex: nextCardIdx,
-          currentTopicId: topicId || currentTopicId,
-        }).catch(console.error);
-      }
+      updateRoomNavState(liveRoom.roomCode, {
+        currentStage: nextStage,
+        currentCardIndex: nextCardIdx,
+        currentTopicId: topicId || currentTopicId,
+      }).catch(console.error);
     }
   };
 
@@ -344,10 +452,8 @@ export default function App() {
     playStageChime();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    if (stage !== 'summary') {
-      const targetIdx = cardIndexByStage[stage] || 0;
-      syncNavToRoom(stage, targetIdx);
-    }
+    const targetIdx = stage !== 'summary' ? (cardIndexByStage[stage] || 0) : 0;
+    syncNavToRoom(stage, targetIdx);
   };
 
   // Card Navigation
@@ -439,22 +545,37 @@ export default function App() {
 
   // Action Commitments Handlers
   const handleAddAction = (action: Omit<ActionCommitment, 'id' | 'timestamp'>) => {
+    const finalMemberName = action.memberName?.trim() || currentUserName?.trim() || '組員';
     const newAction: ActionCommitment = {
       ...action,
+      memberName: finalMemberName,
       id: `act-${Date.now()}-${Math.random()}`,
       timestamp: Date.now(),
     };
 
     setActions((prev) => [newAction, ...prev]);
 
+    // Keep currentUserName updated
+    if (finalMemberName && (!currentUserName || !currentUserName.trim())) {
+      setCurrentUserName(finalMemberName);
+      try {
+        localStorage.setItem('currentUserName', finalMemberName);
+        localStorage.setItem(STORAGE_KEYS.USER_NAME, finalMemberName);
+        localStorage.setItem(STORAGE_KEYS.LEGACY_USER_NAME, finalMemberName);
+      } catch {}
+    }
+
     // If connected to Firebase room, push to Cloud Database
     if (liveRoom?.roomCode) {
-      submitLiveAction(liveRoom.roomCode, action).catch(console.error);
+      submitLiveAction(liveRoom.roomCode, {
+        ...action,
+        memberName: finalMemberName,
+      }).catch(console.error);
     }
 
     // Also mark this member as has shared
     setMembers((prev) =>
-      prev.map((m) => (m.name === action.memberName ? { ...m, hasShared: true } : m))
+      prev.map((m) => (m.name === finalMemberName ? { ...m, hasShared: true } : m))
     );
   };
 
@@ -502,10 +623,21 @@ export default function App() {
 
   const handleTopicsUpdated = (newTopics: WeeklyTopic[]) => {
     setTopics(newTopics);
-    localStorage.setItem(STORAGE_KEYS.TOPICS, JSON.stringify(newTopics));
-    if (newTopics.length > 0 && !newTopics.some((t) => t.id === currentTopicId)) {
-      setCurrentTopicId(newTopics[0].id);
-      localStorage.setItem(STORAGE_KEYS.CURRENT_TOPIC_ID, newTopics[0].id);
+    try {
+      localStorage.setItem(STORAGE_KEYS.TOPICS, JSON.stringify(newTopics));
+    } catch {}
+    seedCloudTopics(newTopics).catch((err) => {
+      console.warn('Failed to sync updated topics to Firestore:', err);
+    });
+    if (newTopics.length > 0) {
+      const active = newTopics.find((t) => t.id === currentTopicId);
+      if (!active || (active.questions.length === 0 && newTopics.some((t) => t.questions.length > 0))) {
+        const best = newTopics.find((t) => t.questions.length > 0) || newTopics[0];
+        setCurrentTopicId(best.id);
+        try {
+          localStorage.setItem(STORAGE_KEYS.CURRENT_TOPIC_ID, best.id);
+        } catch {}
+      }
     }
   };
 
@@ -518,10 +650,14 @@ export default function App() {
     setTopics((prevTopics) => {
       const updated = prevTopics.map((topic) => {
         if (topic.id === currentTopicId) {
-          return {
+          const updatedTopic = {
             ...topic,
             questions: [...topic.questions, newCard],
           };
+          saveTopicToCloud(updatedTopic).catch((err) => {
+            console.warn('Failed to save manual question to Firestore:', err);
+          });
+          return updatedTopic;
         }
         return topic;
       });
@@ -535,6 +671,65 @@ export default function App() {
     setCardIndexByStage((prev) => ({ ...prev, [newCard.stage]: countInStage }));
   };
 
+  const handleOpenRoom = async () => {
+    if (!liveRoom?.roomCode) return;
+    try {
+      await openLiveRoom(liveRoom.roomCode);
+      setLiveRoom((prev) => (prev ? { ...prev, status: 'active' } : null));
+      playStageChime();
+      confetti({
+        particleCount: 80,
+        spread: 80,
+        origin: { y: 0.6 },
+      });
+    } catch (err) {
+      console.error('Failed to open room:', err);
+    }
+  };
+
+  const handleLeaveRoom = () => {
+    setLiveRoom(null);
+    setCurrentUserRole('member');
+    setHasJoinedRoom(false);
+    if (currentUserName) {
+      setMembers([
+        {
+          id: 'm-self',
+          name: currentUserName,
+          avatarColor: '#3B82F6',
+          hasShared: false,
+        },
+      ]);
+      setActiveSpeakerName(currentUserName);
+    } else {
+      setMembers([]);
+      setActiveSpeakerName('');
+    }
+    setIsRoomModalOpen(true);
+  };
+
+  const handleJoinRoomSuccess = (room: LiveRoomState, role: 'host' | 'member') => {
+    setLiveRoom(room);
+    setCurrentUserRole(role);
+    setHasJoinedRoom(true);
+    setIsRoomModalOpen(false);
+
+    // Sync member list strictly from room.members
+    const roomMembers = Array.isArray(room.members) && room.members.length > 0
+      ? room.members
+      : [room.hostName || currentUserName || '我'];
+    const palette = ['#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#06B6D4', '#6366F1', '#14B8A6'];
+    setMembers(
+      roomMembers.map((name, idx) => ({
+        id: `m-room-${name}`,
+        name,
+        avatarColor: palette[idx % palette.length],
+        hasShared: false,
+      }))
+    );
+    setActiveSpeakerName(roomMembers[0] || currentUserName || '');
+  };
+
   return (
     <div className="min-h-screen bg-stone-100 flex flex-col justify-between text-stone-800 antialiased selection:bg-amber-200">
       {/* Top Header */}
@@ -545,7 +740,7 @@ export default function App() {
         onOpenMembersModal={() => setIsMembersModalOpen(true)}
         onOpenSummaryTab={() => handleSelectStage('summary')}
         onOpenRoomModal={() => setIsRoomModalOpen(true)}
-        onOpenSheetModal={() => setIsSheetModalOpen(true)}
+        onOpenSheetDatabase={() => setIsSheetModalOpen(true)}
         liveRoom={liveRoom}
         currentUserRole={currentUserRole}
         isMuted={isMuted}
@@ -556,48 +751,107 @@ export default function App() {
         actionCount={actions.length}
       />
 
-      {/* Stage Step Tabs */}
-      <StageNav
-        currentStage={currentStage}
-        onSelectStage={handleSelectStage}
-        stageProgress={stageProgress}
-        actionCount={actions.length}
-      />
-
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col py-2 sm:py-4">
-        {currentStage === 'summary' ? (
-          <ActionPlansSection
-            topic={currentTopic}
-            actions={actions}
-            onAddAction={handleAddAction}
-            onDeleteAction={handleDeleteAction}
-            onClearAllActions={handleClearAllActions}
-            onBackToCards={() => handleSelectStage('application')}
-            onOpenSheetModal={() => setIsSheetModalOpen(true)}
+      {/* If connected to live room and status is waiting, display WaitingLobby */}
+      {liveRoom && liveRoom.status === 'waiting' ? (
+        <main className="flex-1 flex flex-col items-center justify-center p-3 sm:p-6">
+          <WaitingLobby
+            room={liveRoom}
+            currentUserRole={currentUserRole}
+            currentUserName={currentUserName}
+            currentTopicTitle={currentTopic?.title || '聚會分享'}
+            onOpenRoom={handleOpenRoom}
+            onLeaveRoom={handleLeaveRoom}
           />
-        ) : (
-          <CardDeck
+        </main>
+      ) : (
+        <>
+          {/* Stage Step Tabs */}
+          <StageNav
             currentStage={currentStage}
-            currentCardIndex={currentCardIndex}
-            cardsInStage={cardsInCurrentStage}
-            onNextCard={handleNextCard}
-            onPrevCard={handlePrevCard}
-            onSelectCardIndex={handleSelectCardIndex}
-            onRandomCard={handleRandomCard}
-            onGoToNextStage={handleGoToNextStage}
-            topic={currentTopic}
-            onAddActionCommitment={handleAddAction}
+            onSelectStage={handleSelectStage}
+            stageProgress={stageProgress}
             actionCount={actions.length}
           />
-        )}
-      </main>
 
-      {/* Floating Emotional Value Cheering Bar */}
-      <ReactionFloatingBar
-        activeSpeakerName={activeSpeakerName}
-        onOpenTimerModal={() => setIsTimerModalOpen(true)}
-      />
+          {/* Main Content Area */}
+          <main className="flex-1 flex flex-col py-2 sm:py-4">
+            {!currentTopic ? (
+              <div className="w-full max-w-md mx-auto my-8 p-8 bg-white rounded-3xl border border-stone-200 text-center shadow-sm">
+                <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
+                  <FileSpreadsheet className="w-7 h-7" />
+                </div>
+                <h3 className="text-lg font-bold text-stone-900 mb-2">尚未載入 Google 試算表題庫</h3>
+                <p className="text-stone-500 mb-6 text-xs sm:text-sm leading-relaxed">
+                  本系統已徹底移除預設備用題庫，100% 依據您的 Google 試算表 CSV 動態載入題目。<br />
+                  請點擊下方按鈕連結試算表 CSV 網址或貼上內容。
+                </p>
+                <button
+                  onClick={() => setIsSheetModalOpen(true)}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-emerald-700 text-white font-bold hover:bg-emerald-800 transition text-xs sm:text-sm shadow-md active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+                  <span>立即設定 / 同步 Google 試算表 CSV</span>
+                </button>
+              </div>
+            ) : currentStage === 'summary' ? (
+              <ActionPlansSection
+                topic={currentTopic}
+                actions={actions}
+                onAddAction={handleAddAction}
+                onDeleteAction={handleDeleteAction}
+                onClearAllActions={handleClearAllActions}
+                onBackToCards={() => handleSelectStage('application')}
+                currentUserName={currentUserName}
+                onSetCurrentUserName={(name) => {
+                  const trimmed = name.trim();
+                  setCurrentUserName(trimmed);
+                  if (trimmed) {
+                    try {
+                      localStorage.setItem('currentUserName', trimmed);
+                      localStorage.setItem(STORAGE_KEYS.USER_NAME, trimmed);
+                      localStorage.setItem(STORAGE_KEYS.LEGACY_USER_NAME, trimmed);
+                    } catch {}
+                  }
+                }}
+                roomCode={liveRoom?.roomCode}
+              />
+            ) : (
+              <CardDeck
+                currentStage={currentStage}
+                currentCardIndex={currentCardIndex}
+                cardsInStage={cardsInCurrentStage}
+                onNextCard={handleNextCard}
+                onPrevCard={handlePrevCard}
+                onSelectCardIndex={handleSelectCardIndex}
+                onRandomCard={handleRandomCard}
+                onGoToNextStage={handleGoToNextStage}
+                topic={currentTopic}
+                onAddActionCommitment={handleAddAction}
+                actionCount={actions.length}
+                actions={actions}
+                currentUserName={currentUserName}
+                onSetCurrentUserName={(name) => {
+                  const trimmed = name.trim();
+                  setCurrentUserName(trimmed);
+                  if (trimmed) {
+                    try {
+                      localStorage.setItem('currentUserName', trimmed);
+                      localStorage.setItem(STORAGE_KEYS.USER_NAME, trimmed);
+                      localStorage.setItem(STORAGE_KEYS.LEGACY_USER_NAME, trimmed);
+                    } catch {}
+                  }
+                }}
+              />
+            )}
+          </main>
+
+          {/* Floating Emotional Value Cheering Bar */}
+          <ReactionFloatingBar
+            activeSpeakerName={activeSpeakerName}
+            onOpenTimerModal={() => setIsTimerModalOpen(true)}
+          />
+        </>
+      )}
 
       {/* Live Room Sync Modal */}
       <RoomSyncModal
@@ -623,12 +877,9 @@ export default function App() {
           }
         }}
         onJoinRoomSuccess={(room, role) => {
-          setLiveRoom(room);
-          setCurrentUserRole(role);
-          setHasJoinedRoom(true);
-          setIsRoomModalOpen(false);
+          handleJoinRoomSuccess(room, role);
         }}
-        onLeaveRoom={() => setLiveRoom(null)}
+        onLeaveRoom={handleLeaveRoom}
         currentTopicId={currentTopicId}
       />
 
@@ -647,12 +898,13 @@ export default function App() {
         isOpen={isSheetModalOpen}
         onClose={() => setIsSheetModalOpen(false)}
         onTopicsUpdated={handleTopicsUpdated}
+        existingTopics={topics}
       />
 
       <ManualAddQuestionModal
         isOpen={isManualAddModalOpen}
         onClose={() => setIsManualAddModalOpen(false)}
-        topicTitle={currentTopic.title}
+        topicTitle={currentTopic?.title || '小組分享'}
         onAddQuestion={handleAddManualQuestion}
       />
 

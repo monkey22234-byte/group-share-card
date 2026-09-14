@@ -19,7 +19,8 @@ import {
   XCircle,
   HelpCircle,
   RotateCcw,
-  Eye
+  Eye,
+  Heart
 } from 'lucide-react';
 import { QuestionCard, QuestionStage, WeeklyTopic, ActionCommitment } from '../types';
 import { STAGES_CONFIG } from '../data/defaultTopics';
@@ -39,9 +40,12 @@ interface CardDeckProps {
   onSelectCardIndex: (index: number) => void;
   onRandomCard: () => void;
   onGoToNextStage: () => void;
-  topic: WeeklyTopic;
+  topic: WeeklyTopic | null;
   onAddActionCommitment: (action: Omit<ActionCommitment, 'id' | 'timestamp'>) => void;
   actionCount: number;
+  actions?: ActionCommitment[];
+  currentUserName?: string;
+  onSetCurrentUserName?: (name: string) => void;
 }
 
 export const CardDeck: React.FC<CardDeckProps> = ({
@@ -56,6 +60,9 @@ export const CardDeck: React.FC<CardDeckProps> = ({
   topic,
   onAddActionCommitment,
   actionCount,
+  actions = [],
+  currentUserName,
+  onSetCurrentUserName,
 }) => {
   const [showHint, setShowHint] = useState(false);
   const [showScripture, setShowScripture] = useState(true);
@@ -65,12 +72,18 @@ export const CardDeck: React.FC<CardDeckProps> = ({
   const [userSelectedOptions, setUserSelectedOptions] = useState<Record<string, number>>({});
   const [revealedCards, setRevealedCards] = useState<Record<string, boolean>>({});
 
-  // Inline fast action submission for Stage 4 (Application)
-  const [memberName, setMemberName] = useState('');
+  // Inline fast action submission for Stage 4 (Application) - directly prefill with room ID/name
+  const [memberName, setMemberName] = useState(() => currentUserName?.trim() || '');
   const [actionText, setActionText] = useState('');
   const [prayerNeeds, setPrayerNeeds] = useState('');
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
   const [actionSubmittedSuccess, setActionSubmittedSuccess] = useState(false);
+
+  useEffect(() => {
+    if (currentUserName && currentUserName.trim()) {
+      setMemberName(currentUserName.trim());
+    }
+  }, [currentUserName]);
 
   const stageMeta = STAGES_CONFIG[currentStage] || STAGES_CONFIG.icebreaker;
   const currentCard = cardsInStage[currentCardIndex] || cardsInStage[0];
@@ -162,31 +175,44 @@ export const CardDeck: React.FC<CardDeckProps> = ({
 
   const handleSubmitInlineAction = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!memberName.trim() || !actionText.trim()) return;
+    const finalName = memberName.trim() || currentUserName?.trim() || '組員';
+    if (!actionText.trim()) return;
+
+    if (onSetCurrentUserName && finalName) {
+      onSetCurrentUserName(finalName);
+    }
 
     setIsSubmittingAction(true);
     onAddActionCommitment({
-      memberName: memberName.trim(),
+      memberName: finalName,
       actionText: actionText.trim(),
       prayerNeeds: prayerNeeds.trim() || undefined,
     });
 
+    playStageChime();
     setActionSubmittedSuccess(true);
     setActionText('');
     setPrayerNeeds('');
     setTimeout(() => {
       setActionSubmittedSuccess(false);
       setIsSubmittingAction(false);
-    }, 2000);
+    }, 1500);
   };
 
-  if (!currentCard) {
+  if (!currentCard || cardsInStage.length === 0) {
     return (
-      <div className="w-full max-w-md mx-auto my-8 p-6 bg-white rounded-3xl border border-stone-200 text-center shadow-sm">
-        <p className="text-stone-500 mb-4 text-sm">此階段尚無卡片題目</p>
+      <div className="w-full max-w-md mx-auto my-8 p-8 bg-white rounded-3xl border border-stone-200 text-center shadow-sm">
+        <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400">
+          <BookOpen className="w-6 h-6" />
+        </div>
+        <h4 className="text-base font-bold text-stone-800 mb-1">此階段試算表未填寫題目</h4>
+        <p className="text-stone-500 mb-6 text-xs leading-relaxed">
+          Google 試算表中尚未填寫本階段的題目。<br />
+          （APP 100% 只載入試算表內容，不使用任何預設或自創題目）
+        </p>
         <button
           onClick={onGoToNextStage}
-          className="w-full py-3 rounded-2xl bg-amber-500 text-white font-semibold hover:bg-amber-600 transition text-sm active:scale-95"
+          className="w-full py-3 rounded-2xl bg-stone-900 text-white font-semibold hover:bg-stone-800 transition text-xs sm:text-sm active:scale-95 shadow-sm"
         >
           前往下一階段
         </button>
@@ -203,22 +229,22 @@ export const CardDeck: React.FC<CardDeckProps> = ({
   return (
     <div className="w-full max-w-lg sm:max-w-xl md:max-w-2xl mx-auto px-3 sm:px-4 py-2 sm:py-4 flex flex-col items-center">
       {/* Stage Header Info Banner */}
-      <div className="w-full mb-2.5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 min-w-0">
+      <div className="w-full mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <span
-            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold border shrink-0 ${stageMeta.badgeBg} ${stageMeta.badgeBorder} ${stageMeta.badgeText}`}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold border shrink-0 ${stageMeta.badgeBg} ${stageMeta.badgeBorder} ${stageMeta.badgeText}`}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
+            <span className="w-2 h-2 rounded-full bg-current shrink-0" />
             {stageMeta.name}
           </span>
-          <span className="text-[11px] text-stone-500 truncate hidden xs:inline">
+          <span className="text-xs sm:text-sm text-stone-600 truncate hidden xs:inline font-medium">
             {stageMeta.subtitle}
           </span>
         </div>
 
         {/* Card index indicators & Shuffle */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5">
             {cardsInStage.map((c, idx) => {
               const isAnswered = revealedCards[c.id] || userSelectedOptions[c.id] !== undefined;
               return (
@@ -229,12 +255,12 @@ export const CardDeck: React.FC<CardDeckProps> = ({
                     playCardFlipSound();
                     onSelectCardIndex(idx);
                   }}
-                  className={`h-2.5 rounded-full transition-all duration-300 flex items-center justify-center ${
+                  className={`h-3 rounded-full transition-all duration-300 flex items-center justify-center ${
                     idx === currentCardIndex
-                      ? `w-6 ${stageMeta.accentBg}`
+                      ? `w-7 ${stageMeta.accentBg}`
                       : isAnswered
-                      ? 'w-2.5 bg-emerald-400'
-                      : 'w-2 bg-stone-300 hover:bg-stone-400'
+                      ? 'w-3 bg-emerald-400'
+                      : 'w-2.5 bg-stone-300 hover:bg-stone-400'
                   }`}
                   title={`第 ${idx + 1} 題 ${isAnswered ? '(已回答)' : ''}`}
                 />
@@ -247,16 +273,16 @@ export const CardDeck: React.FC<CardDeckProps> = ({
               playCardFlipSound();
               onRandomCard();
             }}
-            className="p-1.5 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-200/70 transition-colors"
+            className="p-2 rounded-xl text-stone-500 hover:text-stone-800 hover:bg-stone-200/70 transition-colors"
             title="隨機抽題"
           >
-            <Shuffle className="w-4 h-4" />
+            <Shuffle className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
       </div>
 
       {/* 3D Stack / Card Container with AnimatePresence */}
-      <div className="w-full relative min-h-[360px] sm:min-h-[400px] flex flex-col">
+      <div className="w-full relative min-h-[380px] sm:min-h-[420px] flex flex-col">
         {/* Background Visual Depth Layers */}
         <div className="absolute inset-0 top-2.5 bg-stone-200/60 rounded-3xl transform rotate-0.5 scale-[0.99] pointer-events-none -z-10 shadow-xs" />
         <div className="absolute inset-0 top-1 bg-stone-100/90 rounded-3xl transform -rotate-0.5 scale-[0.995] pointer-events-none -z-10 shadow-xs" />
@@ -270,7 +296,7 @@ export const CardDeck: React.FC<CardDeckProps> = ({
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: -direction * 35, scale: 0.97 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="w-full bg-white rounded-3xl border border-stone-200/90 shadow-lg p-5 sm:p-6 md:p-7 flex flex-col justify-between relative overflow-hidden"
+            className="w-full bg-white rounded-3xl border border-stone-200/90 shadow-lg p-5 sm:p-7 md:p-8 flex flex-col justify-between relative overflow-hidden"
           >
             {/* Stage Decorative Subtle Top Strip */}
             <div
@@ -287,39 +313,39 @@ export const CardDeck: React.FC<CardDeckProps> = ({
 
             {/* Card Content Top Meta */}
             <div>
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-mono font-bold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-lg border border-stone-200/60">
+              <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs sm:text-sm font-mono font-bold text-stone-700 bg-stone-100 px-2.5 py-1 rounded-lg border border-stone-200/70">
                     #{currentCardIndex + 1} / {cardsInStage.length}
                   </span>
                   {isQuizCard && (
-                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200 flex items-center gap-1">
-                      <BookOpen className="w-3 h-3 text-emerald-600" />
+                    <span className="text-xs sm:text-sm font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1.5">
+                      <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
                       複習選擇題
                     </span>
                   )}
                   {currentCard.timeSuggestionMinutes && !isQuizCard && (
-                    <span className="flex items-center gap-1 text-[11px] text-stone-500 font-medium">
-                      <Clock className="w-3 h-3 text-stone-400" />
+                    <span className="flex items-center gap-1 text-xs sm:text-sm text-stone-600 font-medium">
+                      <Clock className="w-3.5 h-3.5 text-stone-400" />
                       約 {currentCard.timeSuggestionMinutes} 分鐘
                     </span>
                   )}
                 </div>
 
                 {/* Card Title */}
-                <h4 className="text-xs font-semibold text-stone-500 truncate max-w-[160px] text-right">
+                <h4 className="text-xs sm:text-sm font-semibold text-stone-500 truncate max-w-[180px] text-right">
                   {currentCard.title}
                 </h4>
               </div>
 
               {/* Main Question Text */}
-              <div className="my-1.5 sm:my-2">
-                <h3 className="text-lg sm:text-xl font-bold text-stone-900 leading-snug tracking-tight">
+              <div className="my-2 sm:my-3">
+                <h3 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-stone-900 leading-snug tracking-tight">
                   {currentCard.question}
                 </h3>
 
                 {currentCard.subtitle && (
-                  <p className="mt-1.5 text-xs sm:text-sm text-stone-600 leading-relaxed">
+                  <p className="mt-2 text-sm sm:text-base md:text-lg text-stone-600 leading-relaxed font-normal">
                     {currentCard.subtitle}
                   </p>
                 )}
@@ -327,24 +353,24 @@ export const CardDeck: React.FC<CardDeckProps> = ({
 
               {/* ===== REVIEW STAGE: MULTIPLE CHOICE QUIZ (選擇題互動區) ===== */}
               {isQuizCard && currentCard.options && (
-                <div className="mt-4 space-y-2.5">
+                <div className="mt-4 sm:mt-5 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+                    <span className="text-xs sm:text-sm font-bold text-stone-600 uppercase tracking-wider">
                       請點選答案選項：
                     </span>
                     {isAnswerRevealed && (
                       <button
                         onClick={() => handleResetCardQuiz(currentCard.id)}
-                        className="text-[11px] text-stone-400 hover:text-stone-700 flex items-center gap-1 transition"
+                        className="text-xs sm:text-sm text-stone-500 hover:text-stone-800 flex items-center gap-1 transition font-medium"
                       >
-                        <RotateCcw className="w-3 h-3" />
+                        <RotateCcw className="w-3.5 h-3.5" />
                         <span>重新作答</span>
                       </button>
                     )}
                   </div>
 
                   {/* 4 Option Buttons */}
-                  <div className="grid grid-cols-1 gap-2">
+                  <div className="grid grid-cols-1 gap-2.5">
                     {currentCard.options.map((optionText, optIdx) => {
                       const isSelected = selectedOptionIdx === optIdx;
                       const isCorrect = currentCard.correctAnswerIndex === optIdx;
@@ -377,21 +403,21 @@ export const CardDeck: React.FC<CardDeckProps> = ({
                         <button
                           key={optIdx}
                           onClick={() => handleSelectOption(currentCard.id, optIdx, currentCard.correctAnswerIndex)}
-                          className={`w-full text-left p-3 rounded-2xl border transition-all duration-150 flex items-start gap-2.5 shadow-xs ${btnStyle}`}
+                          className={`w-full text-left p-3.5 sm:p-4 rounded-2xl border transition-all duration-150 flex items-start gap-3 shadow-xs ${btnStyle}`}
                         >
                           <span
-                            className={`w-6 h-6 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 transition-colors ${badgeStyle}`}
+                            className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center text-xs sm:text-sm font-bold shrink-0 transition-colors ${badgeStyle}`}
                           >
                             {letter}
                           </span>
-                          <span className="text-xs sm:text-sm leading-relaxed flex-1 pt-0.5">
+                          <span className="text-sm sm:text-base md:text-lg leading-relaxed flex-1 pt-0.5">
                             {cleanText}
                           </span>
                           {isAnswerRevealed && isCorrect && (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5 animate-bounce" />
+                            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5 animate-bounce" />
                           )}
                           {isAnswerRevealed && isSelected && !isCorrect && (
-                            <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                            <XCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
                           )}
                         </button>
                       );
@@ -399,17 +425,17 @@ export const CardDeck: React.FC<CardDeckProps> = ({
                   </div>
 
                   {/* Immediate Feedback Box & Reveal Button */}
-                  <div className="flex items-center justify-between pt-1 gap-2">
+                  <div className="flex items-center justify-between pt-1.5 gap-2">
                     <button
                       onClick={() => handleToggleReveal(currentCard.id)}
-                      className="text-xs font-medium text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100/80 px-3 py-1.5 rounded-xl border border-emerald-200/70 transition flex items-center gap-1.5 active:scale-95"
+                      className="text-xs sm:text-sm font-semibold text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100/90 px-3.5 py-2 rounded-xl border border-emerald-200 transition flex items-center gap-1.5 active:scale-95"
                     >
-                      <Eye className="w-3.5 h-3.5" />
+                      <Eye className="w-4 h-4" />
                       <span>{isAnswerRevealed ? '隱藏正解與解析' : '👁️ 直接揭曉正解與解析'}</span>
                     </button>
 
                     {isAnswerRevealed && (
-                      <span className={`text-xs font-bold flex items-center gap-1 ${isAnswerCorrect ? 'text-emerald-600' : 'text-stone-600'}`}>
+                      <span className={`text-xs sm:text-sm font-bold flex items-center gap-1.5 ${isAnswerCorrect ? 'text-emerald-600' : 'text-stone-700'}`}>
                         {isAnswerCorrect ? '🎉 答對了！' : selectedOptionIdx !== undefined ? '💡 正解已揭曉' : '📖 正解已揭曉'}
                       </span>
                     )}
@@ -425,24 +451,24 @@ export const CardDeck: React.FC<CardDeckProps> = ({
                         transition={{ duration: 0.25 }}
                         className="overflow-hidden"
                       >
-                        <div className="mt-2 p-3.5 sm:p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 text-emerald-950 shadow-xs">
-                          <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 mb-1.5">
+                        <div className="mt-3 p-4 sm:p-5 rounded-2xl bg-emerald-50/90 border border-emerald-200 text-emerald-950 shadow-xs">
+                          <div className="flex items-center gap-2 text-sm font-bold text-emerald-900 mb-2">
                             <Sparkles className="w-4 h-4 text-emerald-600" />
                             <span>✨ 真理解析與經文亮光：</span>
                           </div>
                           
                           {currentCard.explanation && (
-                            <p className="text-xs sm:text-sm text-stone-800 leading-relaxed">
+                            <p className="text-sm sm:text-base text-stone-800 leading-relaxed font-normal">
                               {currentCard.explanation}
                             </p>
                           )}
 
                           {currentCard.scriptureText && (
-                            <div className="mt-2.5 pt-2 border-t border-emerald-200/60 text-xs text-stone-700">
-                              <span className="font-semibold text-emerald-900 block mb-0.5">
+                            <div className="mt-3 pt-2.5 border-t border-emerald-200/80 text-sm text-stone-700">
+                              <span className="font-semibold text-emerald-900 block mb-1">
                                 📖 出處：{currentCard.scriptureReference}
                               </span>
-                              <p className="italic pl-2 border-l-2 border-emerald-400 text-stone-700">
+                              <p className="italic pl-2.5 border-l-2 border-emerald-400 text-stone-800 leading-relaxed">
                                 「{currentCard.scriptureText}」
                               </p>
                             </div>
@@ -455,23 +481,23 @@ export const CardDeck: React.FC<CardDeckProps> = ({
               )}
 
               {/* Scripture Highlight Drawer (for non-quiz cards or open reflection) */}
-              {!isQuizCard && (currentCard.scriptureReference || currentCard.scriptureText || (currentStage === 'review' && topic.mainScripture)) && (
-                <div className="mt-3 p-3 sm:p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/60 text-stone-800">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
-                      <BookOpen className="w-3.5 h-3.5 text-amber-700" />
-                      <span>經文依據：{currentCard.scriptureReference || topic.mainScripture}</span>
+              {!isQuizCard && (currentCard.scriptureReference || currentCard.scriptureText || (currentStage === 'review' && topic?.mainScripture)) && (
+                <div className="mt-4 p-3.5 sm:p-4 rounded-2xl bg-amber-50/80 border border-amber-200 text-stone-800">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-amber-900">
+                      <BookOpen className="w-4 h-4 text-amber-700" />
+                      <span>經文依據：{currentCard.scriptureReference || topic?.mainScripture}</span>
                     </div>
                     <button
                       onClick={() => setShowScripture(!showScripture)}
-                      className="text-[11px] text-amber-700 hover:text-amber-900 font-medium"
+                      className="text-xs sm:text-sm text-amber-800 hover:text-amber-950 font-semibold"
                     >
                       {showScripture ? '收合' : '展開'}
                     </button>
                   </div>
                   {showScripture && (
-                    <p className="text-xs text-stone-700 italic leading-relaxed pl-2 border-l-2 border-amber-300">
-                      {currentCard.scriptureText || topic.scriptureExcerpt || '請翻開聖經對照本段經文'}
+                    <p className="text-sm sm:text-base text-stone-800 italic leading-relaxed pl-2.5 border-l-2 border-amber-400">
+                      {currentCard.scriptureText || topic?.scriptureExcerpt || '請翻開聖經對照本段經文'}
                     </p>
                   )}
                 </div>
@@ -479,14 +505,14 @@ export const CardDeck: React.FC<CardDeckProps> = ({
 
               {/* Facilitator's Heart Hints (Toggle / Accordion) */}
               {currentCard.hint && (
-                <div className="mt-3">
+                <div className="mt-3.5">
                   <button
                     onClick={() => setShowHint(!showHint)}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-stone-600 hover:text-stone-900 bg-stone-100/90 hover:bg-stone-200/70 px-3 py-1.5 rounded-xl transition-all"
+                    className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-stone-700 hover:text-stone-950 bg-stone-100 hover:bg-stone-200/80 px-3.5 py-2 rounded-xl transition-all"
                   >
-                    <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                    <Lightbulb className="w-4 h-4 text-amber-500" />
                     <span>{isQuizCard ? '💡 查看複習小提示' : '小組長引導心法與提示'}</span>
-                    {showHint ? <ChevronUp className="w-3.5 h-3.5 ml-0.5" /> : <ChevronDown className="w-3.5 h-3.5 ml-0.5" />}
+                    {showHint ? <ChevronUp className="w-4 h-4 ml-0.5" /> : <ChevronDown className="w-4 h-4 ml-0.5" />}
                   </button>
 
                   <AnimatePresence>
@@ -497,8 +523,8 @@ export const CardDeck: React.FC<CardDeckProps> = ({
                         exit={{ opacity: 0, height: 0 }}
                         className="overflow-hidden"
                       >
-                        <div className="mt-2 p-3 bg-stone-50 rounded-xl border border-stone-200/70 text-xs text-stone-600 leading-relaxed">
-                          <p className="font-semibold text-stone-700 mb-0.5">💡 提示引導：</p>
+                        <div className="mt-2.5 p-3.5 sm:p-4 bg-stone-50 rounded-xl border border-stone-200 text-sm text-stone-700 leading-relaxed">
+                          <p className="font-bold text-stone-800 mb-1">💡 提示引導：</p>
                           {currentCard.hint}
                         </div>
                       </motion.div>
@@ -543,10 +569,10 @@ export const CardDeck: React.FC<CardDeckProps> = ({
                     <div className="sm:col-span-1">
                       <input
                         type="text"
-                        placeholder="你的名字 (例: 小明)"
+                        placeholder="你的姓名 / 房間 ID"
                         value={memberName}
                         onChange={(e) => setMemberName(e.target.value)}
-                        className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-stone-300 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-rose-400 shadow-xs"
+                        className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-rose-300 bg-rose-50/40 text-stone-900 font-bold placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-rose-400 shadow-xs"
                         required
                       />
                     </div>
@@ -589,6 +615,63 @@ export const CardDeck: React.FC<CardDeckProps> = ({
                     </button>
                   </div>
                 </form>
+
+                {/* Live list of responses already submitted */}
+                {actions && actions.length > 0 && (
+                  <div className="mt-3.5 pt-3 border-t border-rose-200/70 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-stone-700">
+                      <span className="flex items-center gap-1.5 text-rose-800">
+                        <CheckCircle2 className="w-4 h-4 text-rose-600" />
+                        已回應夥伴行動方案 ({actions.length} 筆)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={onGoToNextStage}
+                        className="text-xs text-rose-700 hover:text-rose-850 font-bold underline transition"
+                      >
+                        前往完整 LINE 彙整 →
+                      </button>
+                    </div>
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {actions.map((act) => {
+                        const displayName = act.memberName?.trim() || '小組夥伴';
+                        return (
+                          <div
+                            key={act.id}
+                            className="p-2.5 sm:p-3 rounded-xl bg-white border border-rose-200/80 shadow-2xs flex items-start justify-between gap-2.5 text-left"
+                          >
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <span className="w-7 h-7 rounded-full bg-rose-100 text-rose-800 font-bold text-xs flex items-center justify-center shrink-0">
+                                {displayName.slice(0, 1)}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-sm text-stone-900">
+                                    {displayName}
+                                  </span>
+                                  {act.targetDate && (
+                                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-stone-100 text-stone-600">
+                                      {act.targetDate}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs sm:text-sm text-stone-800 font-medium mt-0.5">
+                                  📌 {act.actionText}
+                                </p>
+                                {act.prayerNeeds && (
+                                  <p className="text-xs text-stone-500 mt-0.5 flex items-center gap-1">
+                                    <Heart className="w-3 h-3 text-rose-500 shrink-0" />
+                                    <span>代禱：{act.prayerNeeds}</span>
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </motion.div>
@@ -596,19 +679,19 @@ export const CardDeck: React.FC<CardDeckProps> = ({
       </div>
 
       {/* Bottom Navigation Controls */}
-      <div className="w-full mt-4 flex items-center justify-between gap-2.5">
+      <div className="w-full mt-5 flex items-center justify-between gap-3">
         <button
           id="btn-prev-card"
           onClick={handlePrev}
           disabled={currentCardIndex === 0}
-          className="flex items-center gap-1 px-3.5 py-2.5 rounded-2xl bg-stone-200/90 hover:bg-stone-300/80 disabled:opacity-40 disabled:cursor-not-allowed text-stone-800 text-xs sm:text-sm font-semibold transition active:scale-95"
+          className="flex items-center gap-1.5 px-4 py-3 rounded-2xl bg-stone-200/90 hover:bg-stone-300/80 disabled:opacity-40 disabled:cursor-not-allowed text-stone-800 text-sm sm:text-base font-bold transition active:scale-95 shadow-xs"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           <span>上一題</span>
         </button>
 
         {/* Center quick card jumper pills for mobile */}
-        <div className="flex items-center gap-1 overflow-x-auto max-w-[140px] sm:max-w-none px-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto max-w-[150px] sm:max-w-none px-1">
           {cardsInStage.map((_, idx) => (
             <button
               key={idx}
@@ -617,7 +700,7 @@ export const CardDeck: React.FC<CardDeckProps> = ({
                 playCardFlipSound();
                 onSelectCardIndex(idx);
               }}
-              className={`w-6 h-6 rounded-full text-[11px] font-bold flex items-center justify-center transition-all ${
+              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full text-xs sm:text-sm font-bold flex items-center justify-center transition-all ${
                 idx === currentCardIndex
                   ? `${stageMeta.accentBg} text-white shadow-xs scale-110`
                   : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
@@ -635,28 +718,28 @@ export const CardDeck: React.FC<CardDeckProps> = ({
               playStageChime();
               onGoToNextStage();
             }}
-            className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs sm:text-sm font-bold shadow-md hover:shadow-lg transition active:scale-95"
+            className="flex items-center gap-2 px-5 sm:px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm sm:text-base font-bold shadow-md hover:shadow-lg transition active:scale-95"
           >
             <span>
               {currentStage === 'application' ? '前往 LINE 彙整' : '進入下一階段'}
             </span>
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         ) : (
           <button
             id="btn-next-card"
             onClick={handleNext}
-            className="flex items-center gap-1 px-4 sm:px-5 py-2.5 rounded-2xl bg-stone-900 hover:bg-stone-800 text-white text-xs sm:text-sm font-bold shadow-md transition active:scale-95"
+            className="flex items-center gap-1.5 px-5 sm:px-6 py-3 rounded-2xl bg-stone-900 hover:bg-stone-800 text-white text-sm sm:text-base font-bold shadow-md transition active:scale-95"
           >
             <span>下一題</span>
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         )}
       </div>
 
       {/* Keyboard Shortcut Hint */}
-      <p className="mt-2.5 text-[10px] text-stone-400 hidden sm:block">
-        💡 小撇步：按鍵盤 <kbd className="px-1 py-0.5 bg-stone-200 rounded text-stone-700 font-mono">←</kbd> 或 <kbd className="px-1 py-0.5 bg-stone-200 rounded text-stone-700 font-mono">→</kbd> 可切換卡片
+      <p className="mt-3 text-xs text-stone-500 hidden sm:block font-medium">
+        💡 小撇步：按鍵盤 <kbd className="px-1.5 py-0.5 bg-stone-200 rounded text-stone-800 font-mono text-xs">←</kbd> 或 <kbd className="px-1.5 py-0.5 bg-stone-200 rounded text-stone-800 font-mono text-xs">→</kbd> 可切換卡片
       </p>
     </div>
   );

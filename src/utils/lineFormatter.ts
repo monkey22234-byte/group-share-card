@@ -3,16 +3,18 @@ import { WeeklyTopic, ActionCommitment } from '../types';
 /**
  * Formats weekly group sharing actions into a clean, beautiful LINE group message
  */
-export function formatLineGroupMessage(topic: WeeklyTopic, actions: ActionCommitment[]): string {
-  const dateStr = topic.date || new Date().toISOString().split('T')[0];
+export function formatLineGroupMessage(topic: WeeklyTopic | null, actions: ActionCommitment[]): string {
+  const dateStr = topic?.date || new Date().toISOString().split('T')[0];
   
   let msg = `🌿【小組生活行動與代禱守望】🌿\n`;
   msg += `📅 日期：${dateStr}\n`;
-  msg += `📖 主題：${topic.title}\n`;
-  if (topic.mainScripture) {
+  if (topic?.title) {
+    msg += `📖 主題：${topic.title}\n`;
+  }
+  if (topic?.mainScripture) {
     msg += `✨ 經文：${topic.mainScripture}\n`;
   }
-  if (topic.summary) {
+  if (topic?.summary) {
     msg += `💡 本週核心亮光：${topic.summary}\n`;
   }
   
@@ -23,8 +25,9 @@ export function formatLineGroupMessage(topic: WeeklyTopic, actions: ActionCommit
     msg += `（目前尚未登錄行動方案，歡迎大家自由在底下留言接龍本週行動！）\n`;
   } else {
     actions.forEach((act, idx) => {
-      msg += `${idx + 1}. 【${act.memberName}】\n`;
-      msg += `   📌 行動：${act.actionText}\n`;
+      const displayName = act.memberName?.trim() || '小組夥伴';
+      msg += `${idx + 1}. 【${displayName}】\n`;
+      msg += `   📌 行動：${act.actionText || '具體實踐生活中活出真理'}\n`;
       if (act.prayerNeeds && act.prayerNeeds.trim()) {
         msg += `   🙏 代禱：${act.prayerNeeds.trim()}\n`;
       }

@@ -46,15 +46,15 @@ export const StageNav: React.FC<StageNavProps> = ({
                 key={stg.id}
                 id={`stage-tab-${stg.id}`}
                 onClick={() => onSelectStage(stg.id)}
-                className={`relative flex flex-col items-center justify-center py-2 px-1 sm:px-2 rounded-xl transition-all duration-200 text-center ${
+                className={`relative flex flex-col items-center justify-center py-2.5 px-1.5 sm:px-3 rounded-xl transition-all duration-200 text-center ${
                   isActive
-                    ? 'bg-white shadow-sm border border-stone-300 text-stone-900 font-semibold ring-2 ring-amber-400/40 scale-[1.02]'
+                    ? 'bg-white shadow-sm border border-stone-300 text-stone-900 font-bold ring-2 ring-amber-400/40 scale-[1.02]'
                     : 'text-stone-600 hover:bg-stone-200/60 hover:text-stone-900 border border-transparent'
                 }`}
               >
-                <div className="flex items-center gap-1 sm:gap-1.5 mb-0.5">
+                <div className="flex items-center gap-1 sm:gap-1.5 mb-1">
                   <Icon
-                    className={`w-4 h-4 sm:w-4 sm:h-4 ${
+                    className={`w-4 h-4 sm:w-5 sm:h-5 ${
                       isActive
                         ? stg.id === 'icebreaker'
                           ? 'text-sky-600'
@@ -68,7 +68,7 @@ export const StageNav: React.FC<StageNavProps> = ({
                         : 'text-stone-400'
                     }`}
                   />
-                  <span className="text-xs sm:text-sm font-medium tracking-tight truncate">
+                  <span className="text-xs sm:text-sm md:text-base font-bold tracking-tight truncate">
                     <span className="hidden sm:inline">{stg.label}</span>
                     <span className="inline sm:hidden">
                       {stg.id === 'icebreaker' ? '破冰' : stg.id === 'review' ? '回顧' : stg.id === 'reflection' ? '思想' : stg.id === 'application' ? '應用' : '彙整'}
@@ -78,11 +78,11 @@ export const StageNav: React.FC<StageNavProps> = ({
 
                 <div className="flex items-center gap-1">
                   {!isSummary && progress ? (
-                    <span className="text-[10px] text-stone-400 font-mono">
+                    <span className="text-xs text-stone-500 font-mono font-medium">
                       {progress.total > 0 ? `${progress.current + 1}/${progress.total}題` : '0題'}
                     </span>
                   ) : (
-                    <span className="text-[10px] text-emerald-600 font-medium">
+                    <span className="text-xs text-emerald-700 font-bold">
                       {actionCount > 0 ? `${actionCount} 方案` : 'LINE格式'}
                     </span>
                   )}

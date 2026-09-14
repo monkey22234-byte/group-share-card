@@ -74,7 +74,7 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
     setErrorMessage('');
 
     try {
-      const newCode = generateRoomCode('GRP');
+      const newCode = generateRoomCode();
       await createLiveRoom(newCode, inputRoomName.trim(), inputMemberName.trim(), currentTopicId);
       
       const newRoomState: LiveRoomState = {
@@ -86,6 +86,7 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
         currentCardIndex: 0,
         hostName: inputMemberName.trim(),
         members: [inputMemberName.trim()],
+        status: 'waiting',
         updatedAt: Date.now(),
       };
 
@@ -101,8 +102,9 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
 
   const handleJoinRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputRoomCode.trim()) {
-      setErrorMessage('請輸入 6 碼房間代碼（例如 GRP-829）');
+    const cleanCode = inputRoomCode.trim().replace(/\D/g, '').slice(0, 4) || inputRoomCode.trim().toUpperCase();
+    if (!cleanCode) {
+      setErrorMessage('請輸入 4 位數字房間代碼（例如 5821）');
       return;
     }
     if (!inputMemberName.trim()) {
@@ -114,9 +116,9 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
     setErrorMessage('');
 
     try {
-      const roomState = await joinLiveRoom(inputRoomCode.trim(), inputMemberName.trim());
+      const roomState = await joinLiveRoom(cleanCode, inputMemberName.trim());
       if (!roomState) {
-        setErrorMessage(`找不到代碼為「${inputRoomCode.trim().toUpperCase()}」的房間，請向小組長確認代碼。`);
+        setErrorMessage(`找不到代碼為「${cleanCode}」的房間，請向小組長確認 4 位數字代碼。`);
         setIsLoading(false);
         return;
       }
@@ -129,6 +131,31 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Fallback to local mode if Cloud Firestore is unavailable or disabled
+  const handleEnterLocalMode = () => {
+    if (!inputMemberName.trim()) {
+      setErrorMessage('請先輸入你的姓名或暱稱');
+      return;
+    }
+    const cleanCode = inputRoomCode.trim().replace(/\D/g, '').slice(0, 4) || generateRoomCode();
+    const localRoomState: LiveRoomState = {
+      roomId: cleanCode,
+      roomCode: cleanCode,
+      roomName: inputRoomName.trim() || `${inputMemberName.trim()}的小組聚會`,
+      currentTopicId,
+      currentStage: 'icebreaker',
+      currentCardIndex: 0,
+      hostName: inputMemberName.trim(),
+      members: [inputMemberName.trim()],
+      status: 'active',
+      updatedAt: Date.now(),
+    };
+
+    onSetCurrentUserName(inputMemberName.trim());
+    onJoinRoomSuccess(localRoomState, tab === 'create' ? 'host' : 'member');
+    onClose();
   };
 
   const copyRoomCode = () => {
@@ -218,8 +245,15 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
                 </div>
 
                 <div className="text-center my-3 bg-white p-3 rounded-xl border border-emerald-200 shadow-xs">
-                  <span className="text-[11px] text-stone-400 block font-medium">房間代碼</span>
-                  <span className="text-2xl sm:text-3xl font-black font-mono tracking-widest text-emerald-800 select-all">
+                  <div className="flex items-center justify-center gap-1.5 mb-1">
+                    <span className="text-[11px] text-stone-400 font-medium">4 位數字房間代碼</span>
+                    {currentRoom.status === 'waiting' && (
+                      <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.2 rounded-full font-bold">
+                        等待室中
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-3xl font-black font-mono tracking-widest text-emerald-800 select-all">
                     {currentRoom.roomCode}
                   </span>
                 </div>
@@ -230,7 +264,7 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
                     className="flex-1 py-2 px-3 rounded-xl bg-white hover:bg-emerald-100/60 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center justify-center gap-1.5 transition active:scale-95 shadow-xs"
                   >
                     {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedCode ? '已複製代碼！' : '複製代碼'}</span>
+                    <span>{copiedCode ? '已複製代碼！' : '複製 4 位代碼'}</span>
                   </button>
 
                   <button
@@ -241,6 +275,19 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
                     <span>{copiedLink ? '已複製連結！' : '分享加入連結'}</span>
                   </button>
                 </div>
+
+                {/* Return to waiting room button if in waiting state */}
+                {currentRoom.status === 'waiting' && (
+                  <div className="mt-3 pt-3 border-t border-emerald-200/80">
+                    <button
+                      onClick={onClose}
+                      className="w-full py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                      <span>回到聚會等待室</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Member count & list preview */}
                 <div className="mt-3 pt-3 border-t border-emerald-200/80 flex items-center justify-between text-xs text-emerald-900">
@@ -283,7 +330,7 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
                   }`}
                 >
                   <LogIn className="w-3.5 h-3.5 text-amber-500" />
-                  <span>輸入代碼加入</span>
+                  <span>輸入 4 位代碼加入</span>
                 </button>
                 <button
                   type="button"
@@ -307,16 +354,22 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
                 <form onSubmit={handleJoinRoom} className="space-y-3 pt-1">
                   <div>
                     <label className="block text-xs font-bold text-stone-700 mb-1">
-                      房間代碼 (6 碼)
+                      4 位數字房間代碼
                     </label>
                     <input
                       type="text"
-                      placeholder="例如: GRP-829"
+                      placeholder="例如: 5821"
+                      maxLength={4}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={inputRoomCode}
-                      onChange={(e) => setInputRoomCode(e.target.value.toUpperCase())}
-                      className="w-full px-3 py-2.5 rounded-xl border border-stone-300 bg-stone-50 text-stone-900 font-mono font-bold tracking-wider placeholder:font-normal placeholder:tracking-normal placeholder:text-stone-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 uppercase text-sm"
+                      onChange={(e) => setInputRoomCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      className="w-full px-3 py-2.5 rounded-xl border border-stone-300 bg-stone-50 text-stone-900 font-mono font-bold tracking-widest text-center placeholder:font-normal placeholder:tracking-normal placeholder:text-stone-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-lg sm:text-xl"
                       required
                     />
+                    <p className="text-[11px] text-stone-400 mt-1">
+                      請輸入小組長畫面上的 4 位數字代碼即可進入等待區
+                    </p>
                   </div>
 
                   <div>
@@ -334,9 +387,18 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
                   </div>
 
                   {errorMessage && (
-                    <p className="text-xs text-rose-600 font-medium bg-rose-50 p-2.5 rounded-xl border border-rose-200">
-                      ⚠️ {errorMessage}
-                    </p>
+                    <div className="space-y-2">
+                      <p className="text-xs text-rose-600 font-medium bg-rose-50 p-2.5 rounded-xl border border-rose-200">
+                        ⚠️ {errorMessage}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleEnterLocalMode}
+                        className="w-full py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs font-bold flex items-center justify-center gap-1.5 transition"
+                      >
+                        <span>📱 改以單機模式直接開始（免雲端連線）</span>
+                      </button>
+                    </div>
                   )}
 
                   <button
@@ -345,12 +407,19 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
                     className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50"
                   >
                     <LogIn className="w-4 h-4" />
-                    <span>{isLoading ? '連線中...' : '立即加入小組連動'}</span>
+                    <span>{isLoading ? '連線中...' : '進入房間等待區'}</span>
                   </button>
                 </form>
               ) : (
                 /* Create Room Form */
                 <form onSubmit={handleCreateRoom} className="space-y-3 pt-1">
+                  <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs text-emerald-950 flex items-start gap-2">
+                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <p className="leading-relaxed">
+                      建立房間後，系統將<strong>自動生成隨機 4 位數字代碼</strong>並帶您進入等待室。組員輸入 4 位代碼加入後，您可確認全員到齊再一鍵開啟聚會！
+                    </p>
+                  </div>
+
                   <div>
                     <label className="block text-xs font-bold text-stone-700 mb-1">
                       小組長姓名 / 暱稱
@@ -380,9 +449,18 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
                   </div>
 
                   {errorMessage && (
-                    <p className="text-xs text-rose-600 font-medium bg-rose-50 p-2.5 rounded-xl border border-rose-200">
-                      ⚠️ {errorMessage}
-                    </p>
+                    <div className="space-y-2">
+                      <p className="text-xs text-rose-600 font-medium bg-rose-50 p-2.5 rounded-xl border border-rose-200">
+                        ⚠️ {errorMessage}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleEnterLocalMode}
+                        className="w-full py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center justify-center gap-1.5 transition"
+                      >
+                        <span>📱 改以單機模式直接開房（免雲端連線）</span>
+                      </button>
+                    </div>
                   )}
 
                   <button
@@ -391,9 +469,22 @@ export const RoomSyncModal: React.FC<RoomSyncModalProps> = ({
                     className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50"
                   >
                     <PlusCircle className="w-4 h-4" />
-                    <span>{isLoading ? '建立中...' : '建立即時連動聚會'}</span>
+                    <span>{isLoading ? '建立中...' : '建立房間並進入等待室'}</span>
                   </button>
                 </form>
+              )}
+
+              {/* Offline fallback button when not in error state */}
+              {!errorMessage && (
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={handleEnterLocalMode}
+                    className="text-xs text-stone-500 hover:text-stone-800 underline underline-offset-2 transition"
+                  >
+                    不需要多裝置同步？點此直接以「單機模式」開始聚會
+                  </button>
+                </div>
               )}
             </>
           )}

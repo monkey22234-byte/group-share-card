@@ -12,23 +12,38 @@ import {
   orderBy, 
   limit, 
   serverTimestamp,
-  arrayUnion
+  arrayUnion,
+  getDocs,
+  deleteDoc
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { LiveRoomState, ActionCommitment, LiveReactionEvent, LiveAnswerVote } from '../types';
+import { LiveRoomState, ActionCommitment, LiveReactionEvent, LiveAnswerVote, WeeklyTopic } from '../types';
 
 // Initialize Firebase App safely (singleton)
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firestore with configured databaseId if present
-export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId || 'ai-studio-3039834d-1d9d-45e5-bd59-c07e0b529206');
+// Initialize Firestore with configured databaseId if present, otherwise default
+const configDbId = (firebaseConfig as any).firestoreDatabaseId;
+export const db = configDbId ? getFirestore(app, configDbId) : getFirestore(app);
 
 /**
- * Generate a friendly 6-char room code (e.g., GR-829, JOY-77)
+ * Wrap a promise with a timeout to prevent UI hanging indefinitely when offline/disabled
  */
-export function generateRoomCode(prefix = 'GRP'): string {
-  const num = Math.floor(100 + Math.random() * 900);
-  return `${prefix}-${num}`;
+function withTimeout<T>(promise: Promise<T>, timeoutMs = 5000, errorMsg = '連線雲端資料庫逾時（Cloud Firestore 尚未啟用或無法連線）'): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMsg)), timeoutMs)
+    ),
+  ]);
+}
+
+/**
+ * Generate a random 4-digit room code (1000 - 9999)
+ */
+export function generateRoomCode(): string {
+  const num = Math.floor(1000 + Math.random() * 9000);
+  return num.toString();
 }
 
 /**
@@ -40,32 +55,42 @@ export async function createLiveRoom(
   hostName: string,
   initialTopicId: string
 ): Promise<string> {
-  const formattedCode = roomCode.trim().toUpperCase();
-  const roomRef = doc(db, 'rooms', formattedCode);
+  const cleanCode = (roomCode || generateRoomCode()).trim().replace(/\s+/g, '');
+  const roomRef = doc(db, 'rooms', cleanCode);
   
   const initialData: LiveRoomState = {
-    roomId: formattedCode,
-    roomCode: formattedCode,
+    roomId: cleanCode,
+    roomCode: cleanCode,
     roomName: roomName || `${hostName}的小組聚會`,
     currentTopicId: initialTopicId,
     currentStage: 'icebreaker',
     currentCardIndex: 0,
     hostName: hostName || '小組長',
     members: [hostName || '小組長'],
+    status: 'waiting', // 組長開房後預設進入等待室
     updatedAt: Date.now(),
   };
 
-  await setDoc(roomRef, initialData, { merge: true });
-  return formattedCode;
+  await withTimeout(
+    setDoc(roomRef, initialData, { merge: true }),
+    5000,
+    '連線雲端資料庫逾時（Cloud Firestore 尚未啟用或權限不足）'
+  );
+  return cleanCode;
 }
 
 /**
  * Join an existing room
  */
 export async function joinLiveRoom(roomCode: string, memberName: string): Promise<LiveRoomState | null> {
-  const formattedCode = roomCode.trim().toUpperCase();
-  const roomRef = doc(db, 'rooms', formattedCode);
-  const snap = await getDoc(roomRef);
+  const cleanCode = (roomCode || '').trim().replace(/\s+/g, '');
+  if (!cleanCode) return null;
+  const roomRef = doc(db, 'rooms', cleanCode);
+  const snap = await withTimeout(
+    getDoc(roomRef),
+    5000,
+    '連線雲端資料庫逾時（Cloud Firestore 尚未啟用或權限不足）'
+  );
 
   if (!snap.exists()) {
     return null;
@@ -73,13 +98,36 @@ export async function joinLiveRoom(roomCode: string, memberName: string): Promis
 
   // Add member name to room
   if (memberName && memberName.trim()) {
-    await updateDoc(roomRef, {
-      members: arrayUnion(memberName.trim()),
-      updatedAt: Date.now(),
-    });
+    try {
+      await withTimeout(
+        updateDoc(roomRef, {
+          members: arrayUnion(memberName.trim()),
+          updatedAt: Date.now(),
+        }),
+        3000
+      );
+    } catch (e) {
+      console.warn('Could not add member to room in Firestore:', e);
+    }
   }
 
   return snap.data() as LiveRoomState;
+}
+
+/**
+ * Host opens the room from waiting room (transitions from 'waiting' to 'active')
+ */
+export async function openLiveRoom(roomCode: string): Promise<void> {
+  const cleanCode = (roomCode || '').trim().replace(/\s+/g, '');
+  const roomRef = doc(db, 'rooms', cleanCode);
+  await withTimeout(
+    updateDoc(roomRef, {
+      status: 'active',
+      updatedAt: Date.now(),
+    }),
+    4000,
+    '開啟房間失敗，請檢查網路連線'
+  );
 }
 
 /**
@@ -91,10 +139,17 @@ export async function updateRoomNavState(
 ) {
   const formattedCode = roomCode.trim().toUpperCase();
   const roomRef = doc(db, 'rooms', formattedCode);
-  await updateDoc(roomRef, {
-    ...updates,
-    updatedAt: Date.now(),
-  });
+  try {
+    await withTimeout(
+      updateDoc(roomRef, {
+        ...updates,
+        updatedAt: Date.now(),
+      }),
+      3000
+    );
+  } catch (err) {
+    console.warn('Failed to sync room nav state to Firestore:', err);
+  }
 }
 
 /**
@@ -106,10 +161,17 @@ export async function sendLiveReaction(
 ) {
   const formattedCode = roomCode.trim().toUpperCase();
   const reactionsRef = collection(db, 'rooms', formattedCode, 'reactions');
-  await addDoc(reactionsRef, {
-    ...reaction,
-    timestamp: Date.now(),
-  });
+  try {
+    await withTimeout(
+      addDoc(reactionsRef, {
+        ...reaction,
+        timestamp: Date.now(),
+      }),
+      3000
+    );
+  } catch (err) {
+    console.warn('Failed to send live reaction to Firestore:', err);
+  }
 }
 
 /**
@@ -121,11 +183,15 @@ export async function submitLiveAction(
 ) {
   const formattedCode = roomCode.trim().toUpperCase();
   const actionsRef = collection(db, 'rooms', formattedCode, 'actions');
-  const docRef = await addDoc(actionsRef, {
-    ...action,
-    timestamp: Date.now(),
-    isCompleted: false,
-  });
+  const docRef = await withTimeout(
+    addDoc(actionsRef, {
+      ...action,
+      timestamp: Date.now(),
+      isCompleted: false,
+    }),
+    4000,
+    '儲存行動目標失敗（雲端資料庫連線逾時）'
+  );
   return docRef.id;
 }
 
@@ -141,12 +207,19 @@ export async function submitLiveQuizAnswer(
   const formattedCode = roomCode.trim().toUpperCase();
   const answerDocId = `${cardId}_${userName.trim()}`;
   const answerRef = doc(db, 'rooms', formattedCode, 'answers', answerDocId);
-  await setDoc(answerRef, {
-    cardId,
-    userName: userName.trim(),
-    optionIndex,
-    timestamp: Date.now(),
-  });
+  try {
+    await withTimeout(
+      setDoc(answerRef, {
+        cardId,
+        userName: userName.trim(),
+        optionIndex,
+        timestamp: Date.now(),
+      }),
+      3000
+    );
+  } catch (err) {
+    console.warn('Failed to submit quiz answer to Firestore:', err);
+  }
 }
 
 /**
@@ -158,13 +231,19 @@ export function subscribeToRoom(
 ) {
   const formattedCode = roomCode.trim().toUpperCase();
   const roomRef = doc(db, 'rooms', formattedCode);
-  return onSnapshot(roomRef, (docSnap) => {
-    if (docSnap.exists()) {
-      onUpdate(docSnap.data() as LiveRoomState);
-    } else {
-      onUpdate(null);
+  return onSnapshot(
+    roomRef,
+    (docSnap) => {
+      if (docSnap.exists()) {
+        onUpdate(docSnap.data() as LiveRoomState);
+      } else {
+        onUpdate(null);
+      }
+    },
+    (err) => {
+      console.warn('subscribeToRoom warning (offline/permission):', err);
     }
-  });
+  );
 }
 
 /**
@@ -178,13 +257,19 @@ export function subscribeToLiveActions(
   const actionsRef = collection(db, 'rooms', formattedCode, 'actions');
   const q = query(actionsRef, orderBy('timestamp', 'desc'));
 
-  return onSnapshot(q, (snapshot) => {
-    const actions: ActionCommitment[] = [];
-    snapshot.forEach((doc) => {
-      actions.push({ id: doc.id, ...doc.data() } as ActionCommitment);
-    });
-    onUpdate(actions);
-  });
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const actions: ActionCommitment[] = [];
+      snapshot.forEach((doc) => {
+        actions.push({ id: doc.id, ...doc.data() } as ActionCommitment);
+      });
+      onUpdate(actions);
+    },
+    (err) => {
+      console.warn('subscribeToLiveActions warning (offline/permission):', err);
+    }
+  );
 }
 
 /**
@@ -199,24 +284,30 @@ export function subscribeToLiveReactions(
   const q = query(reactionsRef, orderBy('timestamp', 'desc'), limit(1));
 
   let initialLoad = true;
-  return onSnapshot(q, (snapshot) => {
-    if (initialLoad) {
-      initialLoad = false;
-      return;
-    }
-    snapshot.docChanges().forEach((change) => {
-      if (change.type === 'added') {
-        const data = change.doc.data();
-        onReaction({
-          id: change.doc.id,
-          emoji: data.emoji,
-          label: data.label,
-          userName: data.userName || '組員',
-          timestamp: data.timestamp || Date.now(),
-        });
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      if (initialLoad) {
+        initialLoad = false;
+        return;
       }
-    });
-  });
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const data = change.doc.data();
+          onReaction({
+            id: change.doc.id,
+            emoji: data.emoji,
+            label: data.label,
+            userName: data.userName || '組員',
+            timestamp: data.timestamp || Date.now(),
+          });
+        }
+      });
+    },
+    (err) => {
+      console.warn('subscribeToLiveReactions warning (offline/permission):', err);
+    }
+  );
 }
 
 /**
@@ -228,11 +319,95 @@ export function subscribeToLiveAnswers(
 ) {
   const formattedCode = roomCode.trim().toUpperCase();
   const answersRef = collection(db, 'rooms', formattedCode, 'answers');
-  return onSnapshot(answersRef, (snapshot) => {
-    const list: LiveAnswerVote[] = [];
-    snapshot.forEach((doc) => {
-      list.push({ id: doc.id, ...doc.data() } as LiveAnswerVote);
-    });
-    onUpdate(list);
-  });
+  return onSnapshot(
+    answersRef,
+    (snapshot) => {
+      const list: LiveAnswerVote[] = [];
+      snapshot.forEach((doc) => {
+        list.push({ id: doc.id, ...doc.data() } as LiveAnswerVote);
+      });
+      onUpdate(list);
+    },
+    (err) => {
+      console.warn('subscribeToLiveAnswers warning (offline/permission):', err);
+    }
+  );
+}
+
+/**
+ * Clean topics to ensure strictly 1 question for the application stage
+ */
+export function sanitizeWeeklyTopic(topic: WeeklyTopic): WeeklyTopic {
+  const rawQuestions = topic.questions || [];
+  const nonAppQuestions = rawQuestions.filter((q) => q.stage !== 'application');
+  const appQuestions = rawQuestions.filter((q) => q.stage === 'application');
+  // Strict rule: application stage must only have 1 question
+  const finalAppQuestions = appQuestions.slice(0, 1);
+
+  return {
+    ...topic,
+    questions: [...nonAppQuestions, ...finalAppQuestions],
+  };
+}
+
+/**
+ * Subscribe to Weekly Topics in Cloud Firestore database
+ * Automatically synchronizes whenever topics are added or modified in Firestore.
+ */
+export function subscribeToCloudTopics(
+  onUpdate: (topics: WeeklyTopic[]) => void
+): () => void {
+  const topicsRef = collection(db, 'topics');
+
+  return onSnapshot(
+    topicsRef,
+    async (snapshot) => {
+      if (snapshot.empty) {
+        onUpdate([]);
+        return;
+      }
+
+      const list: WeeklyTopic[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as WeeklyTopic;
+        list.push(sanitizeWeeklyTopic({ ...data, id: docSnap.id }));
+      });
+
+      // Sort by date descending (latest first)
+      list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      onUpdate(list);
+    },
+    (err) => {
+      console.warn('Firestore topics subscription warning (offline or permission):', err);
+      onUpdate([]);
+    }
+  );
+}
+
+/**
+ * Seed or update topics to Cloud Firestore database
+ */
+export async function seedCloudTopics(topics: WeeklyTopic[]): Promise<void> {
+  for (const topic of topics) {
+    const cleaned = sanitizeWeeklyTopic(topic);
+    const docRef = doc(db, 'topics', cleaned.id);
+    await setDoc(docRef, cleaned, { merge: true });
+  }
+}
+
+/**
+ * Save or update a single topic in Cloud Firestore database
+ */
+export async function saveTopicToCloud(topic: WeeklyTopic): Promise<void> {
+  const cleaned = sanitizeWeeklyTopic(topic);
+  const docRef = doc(db, 'topics', cleaned.id);
+  await setDoc(docRef, cleaned, { merge: true });
+}
+
+/**
+ * Delete a topic from Cloud Firestore database
+ */
+export async function deleteTopicFromCloud(topicId: string): Promise<void> {
+  const docRef = doc(db, 'topics', topicId);
+  await deleteDoc(docRef);
 }

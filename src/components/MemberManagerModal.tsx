@@ -73,18 +73,18 @@ export const MemberManagerModal: React.FC<MemberManagerModalProps> = ({
       <div className="bg-white rounded-3xl max-w-md w-full max-h-[85vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
         {/* Header */}
         <div className="p-5 border-b border-stone-200 bg-stone-900 text-stone-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-sky-400" />
+          <div className="flex items-center gap-2.5">
+            <Users className="w-6 h-6 text-sky-400" />
             <div>
-              <h3 className="text-base font-bold text-stone-100">小組成員與分享輪序</h3>
-              <p className="text-[11px] text-stone-400">
+              <h3 className="text-lg font-bold text-stone-100">小組成員與分享輪序</h3>
+              <p className="text-xs text-stone-400">
                 已分享 {sharedCount} / {members.length} 人
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-stone-400 hover:text-white transition"
+            className="p-1.5 rounded-lg text-stone-400 hover:text-white transition"
           >
             <X className="w-5 h-5" />
           </button>
@@ -93,22 +93,22 @@ export const MemberManagerModal: React.FC<MemberManagerModalProps> = ({
         {/* Random Picker Action Banner */}
         <div className="p-4 bg-sky-50 border-b border-sky-100 flex items-center justify-between gap-2">
           <div>
-            <span className="text-xs font-bold text-sky-900 block">🎲 下一位分享者抽籤</span>
+            <span className="text-sm font-bold text-sky-900 block">🎲 下一位分享者抽籤</span>
             {pickedResult ? (
-              <span className="text-xs text-sky-700 font-bold">
-                🎉 抽中：<span className="text-sm text-sky-950 underline">{pickedResult}</span>
+              <span className="text-sm text-sky-700 font-bold">
+                🎉 抽中：<span className="text-base text-sky-950 font-black underline">{pickedResult}</span>
               </span>
             ) : (
-              <span className="text-[11px] text-sky-700">隨機挑選一位尚未分享的夥伴</span>
+              <span className="text-xs text-sky-700">隨機挑選一位尚未分享的夥伴</span>
             )}
           </div>
 
           <button
             onClick={handleRandomPick}
             disabled={isPickingRandom || members.length === 0}
-            className="px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-xs font-bold shadow-xs transition flex items-center gap-1.5 active:scale-95"
+            className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-xs sm:text-sm font-bold shadow-xs transition flex items-center gap-1.5 active:scale-95"
           >
-            <Shuffle className="w-3.5 h-3.5" />
+            <Shuffle className="w-4 h-4" />
             <span>{isPickingRandom ? '抽籤中...' : '抽下一位'}</span>
           </button>
         </div>
@@ -120,47 +120,47 @@ export const MemberManagerModal: React.FC<MemberManagerModalProps> = ({
             placeholder="輸入新成員姓名 (例: 小華)"
             value={newMemberName}
             onChange={(e) => setNewMemberName(e.target.value)}
-            className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-stone-300 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="flex-1 px-3.5 py-2 text-sm rounded-xl border border-stone-300 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
           <button
             type="submit"
             disabled={!newMemberName.trim()}
-            className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-xs font-semibold hover:bg-stone-800 disabled:opacity-50 transition flex items-center gap-1"
+            className="px-4 py-2 rounded-xl bg-stone-900 text-white text-xs sm:text-sm font-bold hover:bg-stone-800 disabled:opacity-50 transition flex items-center gap-1"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-4 h-4" />
             <span>加入</span>
           </button>
         </form>
 
         {/* Member List */}
-        <div className="p-4 overflow-y-auto space-y-2 flex-1">
+        <div className="p-4 overflow-y-auto space-y-2.5 flex-1">
           {members.map((member) => {
             const isSpeaking = activeSpeakerName === member.name;
             return (
               <div
                 key={member.id}
-                className={`p-3 rounded-2xl border transition flex items-center justify-between gap-2 ${
+                className={`p-3.5 rounded-2xl border transition flex items-center justify-between gap-2.5 ${
                   isSpeaking
                     ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-400/40 shadow-xs'
                     : 'bg-stone-50 border-stone-200/80 hover:bg-white'
                 }`}
               >
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center gap-3 min-w-0">
                   <button
                     onClick={() => onToggleShared(member.id)}
                     className="text-stone-400 hover:text-emerald-600 transition"
                     title={member.hasShared ? '已完成分享 (點擊取消)' : '尚未分享 (點擊標記已分享)'}
                   >
                     {member.hasShared ? (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600 fill-emerald-50" />
+                      <CheckCircle2 className="w-6 h-6 text-emerald-600 fill-emerald-50" />
                     ) : (
-                      <Circle className="w-5 h-5 text-stone-300" />
+                      <Circle className="w-6 h-6 text-stone-300" />
                     )}
                   </button>
 
                   <div className="min-w-0">
                     <span
-                      className={`text-sm font-bold block truncate ${
+                      className={`text-base font-bold block truncate ${
                         member.hasShared ? 'line-through text-stone-400' : 'text-stone-900'
                       }`}
                     >
@@ -169,12 +169,12 @@ export const MemberManagerModal: React.FC<MemberManagerModalProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => onSelectActiveSpeaker(member.name)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1 transition ${
                       isSpeaking
-                        ? 'bg-amber-500 text-stone-950 font-bold'
+                        ? 'bg-amber-500 text-stone-950 shadow-xs'
                         : 'bg-stone-200 text-stone-700 hover:bg-stone-300'
                     }`}
                   >

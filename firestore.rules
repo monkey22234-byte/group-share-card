@@ -1,25 +1,22 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Rooms collection for live fellowship rooms
+    // Fellowship rooms and subcollections (actions, reactions, answers)
     match /rooms/{roomId} {
       allow read, write: if true;
 
-      match /actions/{actionId} {
-        allow read, write: if true;
-      }
-
-      match /reactions/{reactionId} {
-        allow read, write: if true;
-      }
-
-      match /answers/{answerId} {
+      match /{allSubcollections=**} {
         allow read, write: if true;
       }
     }
 
     // Shared topics
     match /topics/{topicId} {
+      allow read, write: if true;
+    }
+
+    // Catch-all for application documents
+    match /{document=**} {
       allow read, write: if true;
     }
   }

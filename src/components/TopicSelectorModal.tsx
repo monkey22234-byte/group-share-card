@@ -59,9 +59,15 @@ export const TopicSelectorModal: React.FC<TopicSelectorModalProps> = ({
                 選擇聚會分享主題
               </h2>
             </div>
-            <p className="text-xs text-stone-400 mt-0.5">
-              連動 Google 試算表資料庫，隨時切換歷週主日信息與題庫
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-xs font-medium border border-emerald-500/30">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                已連動雲端資料庫 (Firestore)
+              </span>
+              <span className="text-xs text-stone-400 hidden sm:inline">
+                即時同步主日信息與聚會題目
+              </span>
+            </div>
           </div>
 
           <button
@@ -74,16 +80,16 @@ export const TopicSelectorModal: React.FC<TopicSelectorModalProps> = ({
 
         {/* Action Buttons Toolbar */}
         <div className="p-4 bg-stone-50 border-b border-stone-200 flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
                 onClose();
                 onOpenSheetDatabase();
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-sm transition active:scale-95"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold shadow-xs transition active:scale-95"
             >
-              <Database className="w-3.5 h-3.5" />
-              <span>同步 Google 試算表</span>
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-200" />
+              <span>動態同步 Google 試算表 CSV</span>
             </button>
 
             <button
@@ -91,15 +97,15 @@ export const TopicSelectorModal: React.FC<TopicSelectorModalProps> = ({
                 onClose();
                 onOpenManualAdd();
               }}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-stone-800 hover:bg-stone-900 text-stone-100 text-xs font-semibold shadow-xs transition active:scale-95"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold shadow-xs transition active:scale-95"
             >
               <Plus className="w-3.5 h-3.5 text-emerald-400" />
-              <span>手動新增題目</span>
+              <span>新增題目卡片</span>
             </button>
           </div>
 
-          <div className="text-xs text-stone-500 font-medium">
-            共 {topics.length} 週主題
+          <div className="text-xs text-stone-600 font-medium bg-white border border-stone-200 px-3 py-1.5 rounded-xl shadow-2xs">
+            資料庫收錄：<strong className="text-stone-900">{topics.length}</strong> 週主題
           </div>
         </div>
 
@@ -141,17 +147,20 @@ export const TopicSelectorModal: React.FC<TopicSelectorModalProps> = ({
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-stone-900 text-white font-bold">
+                        {topic.id}
+                      </span>
                       <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 font-semibold">
                         {topic.date}
                       </span>
                       {topic.speaker && (
-                        <span className="text-[11px] font-medium text-stone-500 flex items-center gap-1">
-                          <User className="w-3 h-3 text-stone-400" />
+                        <span className="text-[11px] font-medium text-stone-600 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-md flex items-center gap-1">
+                          <User className="w-3 h-3 text-amber-600" />
                           <span>{topic.speaker}</span>
                         </span>
                       )}
-                      <span className="text-[11px] text-emerald-800 font-semibold bg-emerald-100/70 px-2 py-0.5 rounded-md">
+                      <span className="text-[11px] text-emerald-800 font-semibold bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-200/60">
                         {topic.mainScripture}
                       </span>
                     </div>
@@ -168,7 +177,7 @@ export const TopicSelectorModal: React.FC<TopicSelectorModalProps> = ({
                   </div>
 
                   <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
-                    <span className="text-xs text-stone-500 font-medium bg-stone-100 px-2.5 py-1 rounded-lg">
+                    <span className="text-xs text-stone-600 font-medium bg-stone-100 px-2.5 py-1 rounded-lg border border-stone-200">
                       {topic.questions.length} 題卡片
                     </span>
 
@@ -190,7 +199,7 @@ export const TopicSelectorModal: React.FC<TopicSelectorModalProps> = ({
 
         {/* Footer */}
         <div className="p-3 bg-stone-100 border-t border-stone-200 text-center text-xs text-stone-500">
-          點擊任一主題即可載入卡片；所有題目與分頁皆由 Google 試算表直接掌控。
+          點擊任一主題即可載入卡片；所有題目與分頁皆與 Cloud Firestore 雲端資料庫保持即時連動。
         </div>
       </div>
     </div>

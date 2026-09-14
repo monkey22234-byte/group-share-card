@@ -88,10 +88,11 @@ export interface LiveRoomState {
   roomCode: string;
   roomName: string;
   currentTopicId: string;
-  currentStage: QuestionStage;
+  currentStage: QuestionStage | 'summary';
   currentCardIndex: number;
   hostName: string;
   members: string[]; // member names
+  status?: 'waiting' | 'active'; // 'waiting': 等待頁面 (組長等待組員進入), 'active': 已開啟聚會
   activeSpeakerName?: string;
   timerSeconds?: number;
   timerTimestamp?: number;

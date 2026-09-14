@@ -98,10 +98,10 @@ export const ReactionFloatingBar: React.FC<ReactionFloatingBarProps> = ({
           <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
             <button
               onClick={onOpenTimerModal}
-              className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-semibold hover:bg-amber-500/30 transition shrink-0"
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs sm:text-sm font-bold hover:bg-amber-500/30 transition shrink-0"
               title="點擊切換分享者或設定計時"
             >
-              <Mic className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+              <Mic className="w-4 h-4 text-amber-400 animate-pulse" />
               <span>{activeSpeakerName ? `發言：${activeSpeakerName}` : '夥伴熱情分享中'}</span>
             </button>
 
@@ -109,7 +109,7 @@ export const ReactionFloatingBar: React.FC<ReactionFloatingBarProps> = ({
               <motion.span
                 initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-[11px] text-stone-300 italic truncate max-w-[200px]"
+                className="text-xs sm:text-sm text-amber-200/90 italic truncate max-w-[200px]"
               >
                 {lastCheerText}
               </motion.span>
@@ -117,8 +117,8 @@ export const ReactionFloatingBar: React.FC<ReactionFloatingBarProps> = ({
           </div>
 
           {/* Reaction Buttons */}
-          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto max-w-full pb-1 sm:pb-0 scrollbar-none">
-            <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider hidden md:inline shrink-0 mr-1">
+          <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 sm:pb-0 scrollbar-none">
+            <span className="text-xs font-bold text-stone-400 uppercase tracking-wider hidden md:inline shrink-0 mr-1">
               提供情緒價值：
             </span>
 
@@ -129,19 +129,19 @@ export const ReactionFloatingBar: React.FC<ReactionFloatingBarProps> = ({
                   key={reaction.id}
                   id={`btn-react-${reaction.id}`}
                   onClick={() => handleTriggerReaction(reaction)}
-                  className="relative group flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-stone-800/90 hover:bg-stone-700 text-stone-200 border border-stone-700/80 hover:border-stone-500 transition-all duration-150 active:scale-90 shrink-0 shadow-sm"
+                  className="relative group flex items-center gap-1.5 px-3 py-2 rounded-xl bg-stone-800/90 hover:bg-stone-700 text-stone-200 border border-stone-700 hover:border-stone-500 transition-all duration-150 active:scale-90 shrink-0 shadow-sm"
                   title={`${reaction.label} (${reaction.subText})`}
                 >
-                  <span className="text-base sm:text-lg group-hover:scale-125 transition-transform">
+                  <span className="text-lg sm:text-xl group-hover:scale-125 transition-transform">
                     {reaction.emoji}
                   </span>
-                  <span className="text-xs font-medium text-stone-200 hidden sm:inline whitespace-nowrap">
+                  <span className="text-xs sm:text-sm font-semibold text-stone-200 hidden sm:inline whitespace-nowrap">
                     {reaction.label}
                   </span>
 
                   {/* Reaction Count Badge */}
                   {count > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-400 text-stone-950 shadow-xs animate-scale">
+                    <span className="px-2 py-0.5 rounded-full text-xs font-black bg-amber-400 text-stone-950 shadow-xs animate-scale">
                       {count}
                     </span>
                   )}

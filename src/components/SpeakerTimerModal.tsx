@@ -135,7 +135,7 @@ export const SpeakerTimerModal: React.FC<SpeakerTimerModalProps> = ({
         </div>
 
         {/* Preset Time Buttons */}
-        <div className="flex items-center gap-2 my-4">
+        <div className="flex items-center gap-2.5 my-4">
           {[
             { label: '1 分鐘', sec: 60 },
             { label: '2 分鐘', sec: 120 },
@@ -145,9 +145,9 @@ export const SpeakerTimerModal: React.FC<SpeakerTimerModalProps> = ({
             <button
               key={preset.sec}
               onClick={() => handlePresetSelect(preset.sec)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+              className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
                 selectedDuration === preset.sec && timerSecondsLeft === null
-                  ? 'bg-amber-400 text-stone-950 font-bold'
+                  ? 'bg-amber-400 text-stone-950 font-bold shadow-xs'
                   : 'bg-stone-800 text-stone-300 hover:bg-stone-750 border border-stone-700'
               }`}
             >
@@ -161,9 +161,9 @@ export const SpeakerTimerModal: React.FC<SpeakerTimerModalProps> = ({
           {isTimerRunning ? (
             <button
               onClick={onPauseTimer}
-              className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-sm flex items-center justify-center gap-2 transition"
+              className="flex-1 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-base flex items-center justify-center gap-2 transition active:scale-95"
             >
-              <Pause className="w-4 h-4" />
+              <Pause className="w-5 h-5" />
               <span>暫停計時</span>
             </button>
           ) : (
@@ -175,19 +175,19 @@ export const SpeakerTimerModal: React.FC<SpeakerTimerModalProps> = ({
                   onStartTimer(selectedDuration);
                 }
               }}
-              className="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-sm flex items-center justify-center gap-2 transition"
+              className="flex-1 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-base flex items-center justify-center gap-2 transition active:scale-95"
             >
-              <Play className="w-4 h-4" />
+              <Play className="w-5 h-5" />
               <span>{timerSecondsLeft !== null ? '繼續計時' : '開始計時'}</span>
             </button>
           )}
 
           <button
             onClick={onResetTimer}
-            className="px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 text-sm font-semibold flex items-center justify-center gap-1.5 transition"
+            className="px-4 py-3.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 text-base font-semibold flex items-center justify-center gap-1.5 transition active:scale-95"
             title="重置計時"
           >
-            <RotateCcw className="w-4 h-4" />
+            <RotateCcw className="w-5 h-5" />
             <span>重設</span>
           </button>
         </div>

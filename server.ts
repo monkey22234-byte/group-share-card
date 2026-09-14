@@ -32,6 +32,36 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", time: new Date().toISOString() });
 });
 
+// Proxy endpoint to fetch Google Sheets CSV without CORS restrictions
+app.get("/api/fetch-csv", async (req, res) => {
+  try {
+    const rawUrl = req.query.url as string;
+    if (!rawUrl) {
+      return res.status(400).json({ error: "請提供試算表 CSV 網址" });
+    }
+
+    const response = await fetch(rawUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; SmallGroupApp/1.0)",
+        Accept: "text/csv, text/plain, */*",
+      },
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: `載入試算表失敗 (${response.status} ${response.statusText})，請確認連結已「發布至網路」或設為「知道連結的人均可檢視」`,
+      });
+    }
+
+    const csvText = await response.text();
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.send(csvText);
+  } catch (err: any) {
+    console.error("Fetch CSV error:", err);
+    res.status(500).json({ error: err.message || "讀取 CSV 失敗" });
+  }
+});
+
 // AI Topic & Question Generator for Small Groups
 app.post("/api/generate-topic-cards", async (req, res) => {
   try {
@@ -61,7 +91,7 @@ app.post("/api/generate-topic-cards", async (req, res) => {
 1. 破冰題 (icebreaker)：2 題。輕鬆自然、安全無壓力、所有人都能輕鬆開口的暖身問題（與主題意象或生活經驗有巧思連結）。
 2. 主題回顧題 (review)：3-4 題選擇題！設計趣味 4 選 1 選擇題（含 options 陣列、correctAnswerIndex 正確答案索引 0-3、explanation 答案解析與經文亮光、hint 提示），幫助大家快速複習講道與經文關鍵字。
 3. 真理思想題 (reflection)：2 題。深度的 "Why" 與心靈反思，引導成員檢視內心、信仰價值觀、過去掙扎或生命光景。
-4. 生活應用題 (application)：1-2 題。具體的 "How" 實踐，聚焦在「本週生活行動」，具體、可行、可檢驗且可作為 LINE 代禱行動守望的具體方案。
+4. 生活應用題 (application)：1 題。具體的 "How" 實踐，聚焦在「本週生活行動」，具體、可行、可檢驗且可作為 LINE 代禱行動守望的具體方案。
 
 同時請總結 3 個信息核心要點（keyPoints）以及一句簡潔的講道摘要（summary）。`;
 

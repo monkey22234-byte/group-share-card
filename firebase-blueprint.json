@@ -12,10 +12,37 @@
         "currentCardIndex": { "type": "number" },
         "hostName": { "type": "string" },
         "members": { "type": "array" },
+        "status": { "type": "string" },
         "activeSpeaker": { "type": "string" },
         "timerEnd": { "type": "number" },
         "updatedAt": { "type": "string" }
       }
+    },
+    "topics": {
+      "title": "WeeklyTopic",
+      "description": "Sermon weekly topics and questions database",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "speaker": { "type": "string" },
+        "mainScripture": { "type": "string" },
+        "scriptureExcerpt": { "type": "string" },
+        "summary": { "type": "string" },
+        "keyPoints": { "type": "array" },
+        "questions": { "type": "array" }
+      }
+    }
+  },
+  "firestore": {
+    "/rooms/{roomId}": {
+      "schema": "rooms",
+      "description": "Fellowship live sharing rooms"
+    },
+    "/topics/{topicId}": {
+      "schema": "topics",
+      "description": "Weekly sermon topics and questions database"
     }
   }
 }
